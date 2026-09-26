@@ -54,12 +54,7 @@ header.site {
   backdrop-filter: blur(8px); padding: 12px 0;
 }
 .header-inner { display: flex; align-items: center; gap: 12px; }
-.back-btn {
-  display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px;
-  background: var(--card); border: 1px solid var(--border); font-size: 13px; color: var(--text);
-  white-space: nowrap; transition: all .2s;
-}
-.back-btn:hover { border-color: var(--primary); color: var(--primary); }
+
 .header-inner h1 { font-size: 18px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-stat { font-size: 12px; color: var(--text-2); white-space: nowrap; }
 .header-stat strong { color: var(--primary); }
@@ -89,6 +84,9 @@ header.site {
   scrollbar-width: none; position: sticky; top: 63px; z-index: 99; background: var(--bg);
 }
 .tabs::-webkit-scrollbar { display: none; }
+@media (min-width: 768px) {
+  .tabs { flex-wrap: wrap; overflow-x: visible; }
+}
 .tab {
   display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--card); font-size: 13px; color: var(--text);
@@ -188,7 +186,6 @@ footer.site p { margin-bottom: 4px; }
 <body>
 <header class="site">
   <div class="container header-inner">
-    <!-- <a class="back-btn" href="https://jdjdndn.github.io/" aria-label="← 券宝主站">← 券宝主站</a> -->
     <h1>优惠链接导航</h1>
     <span class="header-stat">已收录 <strong>114</strong> 个链接</span>
     <button class="theme-btn" id="themeBtn" aria-label="切换深浅色">🌙</button>
@@ -258,10 +255,6 @@ footer.site p { margin-bottom: 4px; }
 <script>
 (function () {
   var LINKS = [];
-  var linkDataEl = document.getElementById('link-data');
-  if (linkDataEl) {
-    try { LINKS = JSON.parse(linkDataEl.textContent); } catch (e) { LINKS = []; }
-  }
 
   function boot() {
     render();
@@ -413,25 +406,21 @@ footer.site p { margin-bottom: 4px; }
     }
   } catch (e) {}
 
-  if (linkDataEl) {
-    boot();
-  } else {
-    fetch('links-data.json')
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (d) {
-        LINKS = d.links || [];
-        var statStrong = document.querySelector('.header-stat strong');
-        if (statStrong) statStrong.textContent = LINKS.length;
-        var allTab = document.querySelector('.tab[data-cat="all"] .tab-count');
-        if (allTab) allTab.textContent = LINKS.length;
-        boot();
-      })
-      .catch(function () {
-        statsBar.textContent = '数据加载失败，请刷新重试';
-        emptyState.classList.add('show');
-        emptyState.querySelector('p').textContent = '无法加载优惠链接数据，请稍后刷新页面';
-      });
-  }
+  fetch('links-data.json')
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      LINKS = d.links || [];
+      var statStrong = document.querySelector('.header-stat strong');
+      if (statStrong) statStrong.textContent = LINKS.length;
+      var allTab = document.querySelector('.tab[data-cat="all"] .tab-count');
+      if (allTab) allTab.textContent = LINKS.length;
+      boot();
+    })
+    .catch(function () {
+      statsBar.textContent = '数据加载失败，请刷新重试';
+      emptyState.classList.add('show');
+      emptyState.querySelector('p').textContent = '无法加载优惠链接数据，请稍后刷新页面';
+    });
 })();
 </script>
 </body>
