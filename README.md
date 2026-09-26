@@ -11,7 +11,6 @@
 | 文件 | 说明 |
 |------|------|
 | `index.html` | 站点首页。通过 `fetch('links-data.json')` 加载数据渲染（数据与页面分离，更新数据无需改页面） |
-| `links.html` | 链接导航页（数据内联版，可直接双击打开，无跨域限制） |
 | `links-data.json` | 链接数据文件（114 个链接 + 更新时间），由构建脚本自动生成 |
 
 ## 目录结构
@@ -19,7 +18,6 @@
 ```
 wcbblll_cc/
 ├── index.html        # 首页（fetch 数据版）
-├── links.html        # 导航页（数据内联版）
 ├── links-data.json   # 链接数据（自动生成，勿手改）
 └── README.md
 ```
@@ -47,10 +45,9 @@ wcbblll_cc/
 # 仅更新链接数据（links-data.json）
 npm run build
 
-# 或单独运行（二选一）
+# 或单独运行
 node scripts/build-links-page.mjs json   # 只生成 links-data.json
 node scripts/build-links-page.mjs index  # 生成 index.html + links-data.json
-node scripts/build-links-page.mjs links  # 生成内联版 links.html
 ```
 
 `npm run build` 会在构建末尾自动执行 `build-links-page.mjs json`，输出最新的 `links-data.json`。
@@ -71,15 +68,14 @@ node scripts/build-links-page.mjs links  # 生成内联版 links.html
 
 ## 友情链接
 
-- <https://jdjdndn.github.io> — 券宝主站（优惠活动聚合、攻略文章）
 - <https://zh.wcbblll.cc> — 中文站
 
 ---
 
 ## 注意事项
 
-- **本地打开**：`index.html` 依赖 fetch 加载 JSON，需通过 HTTP 服务访问（`python -m http.server`）；直接双击 `links.html` 无需服务。
-- **跨域**：当前 index.html 与 links-data.json 同目录部署，为同源请求，无跨域问题；如需从主站跨域拉取数据，需在 Cloudflare 侧加代理/CORS。
+- **本地打开**：`index.html` 依赖 fetch 加载 JSON，需通过 HTTP 服务访问（`python -m http.server`）。
+- **跨域**：当前 index.html 与 links-data.json 同目录部署，为同源请求，无跨域问题；如需跨域拉取其他站数据，需在 Cloudflare 侧加代理/CORS。
 - **小程序链接**：微信小程序（`#小程序://`、`weixin://`）仅在微信内可打开，页面已内置"非微信环境复制链接"提示；支付宝小程序（`alipays://`）脚本已支持识别。
 - **时效性**：部分优惠链接有截止日期，页面会展示"至 20xx.xx.xx"；优惠信息以各平台实际为准。
 - **安全**：外链统一 `target="_blank" rel="noopener noreferrer"`；HTTP 链接在页面标注"非HTTPS"提示。
