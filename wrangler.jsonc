@@ -1,0 +1,13 @@
+{
+  "name": "wcbblll-cc-site",
+  "compatibility_date": "2026-09-27",
+  "assets": {
+    "directory": "./"
+  },
+  "routes": [
+    {
+      "pattern": "wcbblll.cc",
+      "custom_domain": true
+    }
+  ]
+}
