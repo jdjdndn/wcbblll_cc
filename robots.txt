@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wcbblll.cc/sitemap.xml
