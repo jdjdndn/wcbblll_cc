@@ -87,6 +87,10 @@ function detectRoot(startDir) {
     if (parent === dir) break;
     dir = parent;
   }
+  // 兜底：找不到 markers 时，若当前目录是站点子目录（如 github.io/），返回其父目录
+  const base = path.basename(path.resolve(startDir));
+  const parent = path.dirname(path.resolve(startDir));
+  if (base !== 'code' && fs.existsSync(path.join(parent, 'github.io'))) return parent;
   return path.resolve(startDir);
 }
 const ROOT = optRoot ? path.resolve(optRoot) : detectRoot(path.dirname(__filename));
