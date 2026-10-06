@@ -2,8 +2,7 @@
   "name": "wcbblll-cc-site",
   "compatibility_date": "2026-09-27",
   "assets": {
-    "directory": "./",
-    "not_found_handling": "404-page"
+    "directory": "./"
   },
   "routes": [
     {

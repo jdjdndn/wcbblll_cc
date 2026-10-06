@@ -10,15 +10,21 @@
 
 | 文件 | 说明 |
 |------|------|
-| `index.html` | 站点首页。通过 `fetch('links-data.json')` 加载数据渲染（数据与页面分离，更新数据无需改页面） |
+| `index.html` | 站点首页（构建产物）。117 条优惠链接已全部静态预渲染进 HTML，核心内容不依赖 JS 运行时加载 |
 | `links-data.json` | 链接数据文件（114 个链接 + 更新时间），由构建脚本自动生成 |
 
 ## 目录结构
 
 ```
 wcbblll_cc/
-├── index.html        # 首页（fetch 数据版）
-├── links-data.json   # 链接数据（自动生成，勿手改）
+├── index.html          # 首页（构建产物，117 条链接已静态化）
+├── links-data.json     # 链接数据（内容源，勿手改）
+├── build-static.mjs    # 构建脚本（读 links-data.json 生成全套产物）
+├── category/           # 12 个分类独立页（构建产物）
+├── 404.html            # 真实 404 页（构建产物）
+├── sitemap.xml         # 站点地图（构建产物）
+├── wrangler.jsonc      # Cloudflare Workers 静态资源部署配置
+├── rebuild-all.cjs     # 一键重建脚本副本（见下方使用说明）
 └── README.md
 ```
 
@@ -51,6 +57,34 @@ node scripts/build-links-page.mjs index  # 生成 index.html + links-data.json
 ```
 
 `npm run build` 会在构建末尾自动执行 `build-links-page.mjs json`，输出最新的 `links-data.json`。
+
+> 更新完 `links-data.json` 后，回到本目录执行 `node rebuild-all.cjs --prebuild wcbblll_cc` 重建全部静态产物（见下节）。
+
+---
+
+## 内容重建与 SEO 校验（rebuild-all.cjs）
+
+本目录已内置一键重建脚本副本 `rebuild-all.cjs`（本目录无 package.json，无法加 npm prebuild 钩子，需手动执行）。
+
+### 内容更新后重建（改完 links-data.json 后）
+
+```powershell
+node rebuild-all.cjs --prebuild wcbblll_cc
+```
+
+自动完成：重建 index.html（117 条链接全量静态化 + 分类计数从 JSON 重算）、12 个分类页 `category/*.html`、404.html、sitemap.xml（首页 + 12 分类页），并把 `wrangler.jsonc` 的 `not_found_handling` 写回 `"404-page"`；随后自动校验 5 项（链接条数、无核心 fetch、sitemap 条数、分类页数量、404 配置），任一不通过则以非零退出码终止。
+
+### 部署（当前为 Cloudflare Workers 静态资源）
+
+```powershell
+node rebuild-all.cjs --prebuild wcbblll_cc; if ($?) { npx wrangler deploy }
+```
+
+### 其他
+
+- 全站一键重建 + 校验（含 github.io、xiaoshengyi 等全部 20 站）：在任意目录执行 `node rebuild-all.cjs`
+- 等效的原生构建脚本：`node build-static.mjs`（rebuild-all 内部即调用它）
+- 脚本升级：以 `E:\code\rebuild-all.cjs` 为规范版，更新后重新复制到本目录
 
 ---
 
