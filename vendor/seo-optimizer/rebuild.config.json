@@ -115,7 +115,8 @@
         "url": "https://wcbblll.cc/__smoke_missing__.html",
         "status": 404
       }
-    ]
+    ],
+    "onlineBase": "https://wcbblll.cc"
   },
   {
     "name": "github.io",
@@ -172,7 +173,8 @@
         "file": "wrangler.jsonc",
         "pattern": "\"404-page\""
       }
-    ]
+    ],
+    "onlineBase": "https://jdjdndn.github.io"
   },
   {
     "name": "xiaoshengyi",
@@ -222,7 +224,8 @@
         "file": "wrangler.jsonc",
         "pattern": "\"404-page\""
       }
-    ]
+    ],
+    "onlineBase": "https://sy.wcbblll.cc"
   },
   {
     "name": "号卡/dlhaoka",
@@ -250,7 +253,8 @@
     "deploy": [
       "cd E:\\code\\号卡\\dlhaoka && npx wrangler deploy"
     ],
-    "rebuild": false
+    "rebuild": false,
+    "onlineBase": "https://dlhaoka.com"
   },
   {
     "name": "article-site",
@@ -280,7 +284,8 @@
       "cd E:\\code\\article-site && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://www.wcbblll.cc"
   },
   {
     "name": "号卡/172",
@@ -310,7 +315,8 @@
       "cd E:\\code\\号卡\\172 && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://172.dlhaoka.com"
   },
   {
     "name": "号卡/gc",
@@ -340,7 +346,8 @@
       "cd E:\\code\\号卡\\gc && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://gc.dlhaoka.com"
   },
   {
     "name": "号卡/hk",
@@ -370,7 +377,8 @@
       "cd E:\\code\\号卡\\hk && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://hk.dlhaoka.com"
   },
   {
     "name": "号卡/hm",
@@ -406,7 +414,8 @@
       "cd E:\\code\\号卡\\hm && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://hm.dlhaoka.com"
   },
   {
     "name": "号卡/kd",
@@ -442,7 +451,8 @@
       "cd E:\\code\\号卡\\kd && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://kd.dlhaoka.com"
   },
   {
     "name": "号卡/ksj",
@@ -478,7 +488,8 @@
       "cd E:\\code\\号卡\\ksj && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://ksj.dlhaoka.com"
   },
   {
     "name": "号卡/yk",
@@ -514,7 +525,8 @@
       "cd E:\\code\\号卡\\yk && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://yk.dlhaoka.com"
   },
   {
     "name": "随身wifi/chaoneng-wifi",
@@ -538,7 +550,8 @@
       "cd E:\\code\\随身wifi\\chaoneng-wifi && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://chaoneng.wcbblll.cc"
   },
   {
     "name": "随身wifi/feilimao-wifi",
@@ -562,7 +575,8 @@
       "cd E:\\code\\随身wifi\\feilimao-wifi && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://feilimao.wcbblll.cc"
   },
   {
     "name": "随身wifi/gexing-wifi",
@@ -586,7 +600,8 @@
       "cd E:\\code\\随身wifi\\gexing-wifi && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://gexing.wcbblll.cc"
   },
   {
     "name": "随身wifi/liantong-wifi",
@@ -610,7 +625,8 @@
       "cd E:\\code\\随身wifi\\liantong-wifi && npm run build && npx wrangler deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://liantong.wcbblll.cc"
   },
   {
     "name": "信用卡/kahe",
@@ -639,7 +655,8 @@
       "cd E:\\code\\信用卡\\kahe && npm run build && npm run deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://kahe.wcbblll.cc"
   },
   {
     "name": "信用卡/suishou",
@@ -668,7 +685,8 @@
       "cd E:\\code\\信用卡\\suishou && npm run build && npm run deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://suishou.wcbblll.cc"
   },
   {
     "name": "信用卡/zhangshang",
@@ -697,7 +715,8 @@
       "cd E:\\code\\信用卡\\zhangshang && npm run build && npm run deploy"
     ],
     "rebuild": false,
-    "ssr": true
+    "ssr": true,
+    "onlineBase": "https://zhangshang.wcbblll.cc"
   },
   {
     "name": "GitHub自动文章",
@@ -714,6 +733,7 @@
     "deploy": [
       "（文章系统修复后：git push 触发 CI 部署，见该项目 README）"
     ],
-    "rebuild": false
+    "rebuild": false,
+    "onlineBase": null
   }
 ]

@@ -66,6 +66,8 @@ const asJson = has('--json');
 const dumpConfig = has('--dump-config');
 const listOnly = has('--list');
 const help = has('--help');
+const daily = has('--daily');
+const report = has('--report');
 
 if (isMain && help) {
   console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0] + '*/');
@@ -374,7 +376,35 @@ if (isMain && listOnly) {
 }
 
 // ---------- 执行 ----------
-if (isMain && smoke) {
+if (isMain && daily) {
+  // 每日持久巡检：本地 verify + 线上 smoke + 线上断言 + deadline + 产物保护 → runs/ 落盘 + report.html
+  (async () => {
+    try {
+      const { runDaily } = require('./lib/daily.cjs');
+      const rec = await runDaily({});
+      process.exit(rec.issues.some((i) => i.severity === 'high') ? 1 : 0);
+    } catch (e) {
+      console.error('[error] --daily 巡检失败：' + e.message);
+      process.exit(2);
+    }
+  })();
+} else if (isMain && report) {
+  // 仅刷新看板：读取最近一次巡检记录重新渲染 report.html（不重新巡检）
+  try {
+    const { renderReport } = require('./lib/daily.cjs');
+    const runsDir = path.join(path.dirname(__filename), 'runs');
+    const files = fs.existsSync(runsDir) ? fs.readdirSync(runsDir).filter((f) => f.endsWith('.json')).sort() : [];
+    if (!files.length) { console.error('[error] 无巡检记录，请先运行 --daily'); process.exit(1); }
+    const latest = files[files.length - 1];
+    const rec = JSON.parse(fs.readFileSync(path.join(runsDir, latest), 'utf8'));
+    fs.writeFileSync(path.join(path.dirname(__filename), 'report.html'), renderReport(rec), 'utf8');
+    console.log(`[ok] 已刷新 report.html（基于 ${latest}）`);
+    process.exit(0);
+  } catch (e) {
+    console.error('[error] --report 失败：' + e.message);
+    process.exit(2);
+  }
+} else if (isMain && smoke) {
   // 仅在线检查（部署后冒烟），不重建不本地校验
   (async () => {
     const ok = await runSmoke(sites, { asJson });
