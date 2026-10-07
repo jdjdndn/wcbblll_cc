@@ -1,0 +1,14 @@
+{
+  "name": "seo-optimizer",
+  "version": "0.1.0",
+  "description": "多站点 SEO 校验与重建公共库（vendor 导入 + 云端持久巡检）",
+  "main": "rebuild-all.cjs",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "sync": "node sync-lib.cjs",
+    "sync:dry": "node sync-lib.cjs --dry-run",
+    "verify": "node rebuild-all.cjs --verify-only",
+    "list": "node rebuild-all.cjs --list"
+  }
+}
