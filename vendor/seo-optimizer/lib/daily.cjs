@@ -168,7 +168,6 @@ async function runDaily(opts) {
     productGuard: [],
     issues: [],
   };
-
   rec.localVerify = localVerify(o.siteNames || null);
 
   rec.deadline = scanDeadline(sites);
@@ -192,12 +191,36 @@ async function runDaily(opts) {
   for (const g of rec.productGuard) if (g.status && g.status.startsWith('检测到')) issues.push({ site: g.site, page: null, type: 'product-guard', severity: 'warning', expect: '产物未被手工改动', actual: `新增${g.added || 0} 修改${g.modified || 0} 删除${g.removed || 0}（已备份 ${g.backedUp}）`, fixSource: '产物目录', fixHint: '改动已备份至 .seo-optimizer-backup/', verifyAfter: '确认改动意图后重建' });
   rec.issues = issues;
 
+  // AI 修复建议（默认关闭；--ai-audit 显式启用；未配置 CF 凭证时跳过）
+  if (o.aiAudit) {
+    try {
+      const { auditIssues } = require('./ai-audit.cjs');
+      rec.aiAdvice = await auditIssues(issues, { limit: o.aiLimit || 10 });
+    } catch (e) {
+      rec.aiAdvice = { enabled: false, note: 'AI 审计异常: ' + e.message };
+    }
+  }
+
   fs.mkdirSync(RUNS_DIR, { recursive: true });
   const runFile = path.join(RUNS_DIR, rec.date + '.json');
   fs.writeFileSync(runFile, JSON.stringify(rec, null, 2), 'utf8');
 
   const reportFile = path.join(ROOT, 'report.html');
   fs.writeFileSync(reportFile, renderReport(rec), 'utf8');
+
+  // 本地上报到云端统一看板（可选：配置 SEO_REPORT_URL 指向已部署 Worker）
+  if (process.env.SEO_REPORT_URL) {
+    try {
+      await fetch(process.env.SEO_REPORT_URL + '/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rec),
+      });
+      if (!o.quiet) console.log(`[${ts()}] 已上报云端看板：${process.env.SEO_REPORT_URL}`);
+    } catch (e) {
+      if (!o.quiet) console.warn(`[warn] 上报云端看板失败：${e.message}`);
+    }
+  }
 
   if (!o.quiet) {
     console.log(`[${ts()}] 巡检完成：本地 ${rec.localVerify.allOk ? '通过' : '有失败'} / 线上 smoke ${online.filter((x) => x.smoke.length && x.smoke.every((m) => m.ok)).length} 站通过 / 线上断言 ${online.filter((x) => x.onlineVerify && x.onlineVerify.checks.every((c) => c.ok)).length} 站通过`);

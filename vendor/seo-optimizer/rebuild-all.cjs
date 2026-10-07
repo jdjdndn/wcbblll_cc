@@ -68,6 +68,7 @@ const listOnly = has('--list');
 const help = has('--help');
 const daily = has('--daily');
 const report = has('--report');
+const aiAudit = has('--ai-audit');
 
 if (isMain && help) {
   console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0] + '*/');
@@ -381,7 +382,7 @@ if (isMain && daily) {
   (async () => {
     try {
       const { runDaily } = require('./lib/daily.cjs');
-      const rec = await runDaily({});
+      const rec = await runDaily({ aiAudit });
       process.exit(rec.issues.some((i) => i.severity === 'high') ? 1 : 0);
     } catch (e) {
       console.error('[error] --daily 巡检失败：' + e.message);
