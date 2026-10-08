@@ -4,11 +4,5 @@
   "assets": {
     "directory": "./",
     "not_found_handling": "404-page"
-  },
-  "routes": [
-    {
-      "pattern": "wcbblll.cc",
-      "custom_domain": true
-    }
-  ]
+  }
 }
