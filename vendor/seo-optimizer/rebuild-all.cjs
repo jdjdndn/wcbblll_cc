@@ -69,6 +69,7 @@ const help = has('--help');
 const daily = has('--daily');
 const report = has('--report');
 const aiAudit = has('--ai-audit');
+const watchMode = has('--watch');
 
 if (isMain && help) {
   console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0] + '*/');
@@ -79,6 +80,14 @@ if (isMain && help) {
 function readFile(p) { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; } }
 function countOcc(t, pat) { if (!t) return 0; let n = 0, i = 0; while ((i = t.indexOf(pat, i)) !== -1) { n++; i += pat.length; } return n; }
 function ts() { return new Date().toLocaleTimeString('zh-CN', { hour12: false }); }
+const _tty = process.stdout.isTTY;
+const C = {
+  green: (s) => _tty ? '\x1b[32m' + s + '\x1b[0m' : s,
+  red: (s) => _tty ? '\x1b[31m' + s + '\x1b[0m' : s,
+  yellow: (s) => _tty ? '\x1b[33m' + s + '\x1b[0m' : s,
+  cyan: (s) => _tty ? '\x1b[36m' + s + '\x1b[0m' : s,
+  bold: (s) => _tty ? '\x1b[1m' + s + '\x1b[0m' : s,
+};
 function run(cmd, cmdArgs, cwd) {
   let r;
   if ((cmd === 'npm' || cmd === 'npx') && process.platform === 'win32') {
@@ -167,6 +176,9 @@ const ROOT = optRoot ? path.resolve(optRoot) : detectRoot(path.dirname(__filenam
 const P = (...s) => path.join(ROOT, ...s);
 const chk = (desc, type, file, pattern, min) => ({ desc, type, file, pattern, min });
 
+// @deprecated 仅作首次初始化兜底（--dump-config 生成 rebuild.config.json）。
+// 运行时始终以 rebuild.config.json 为唯一事实源（loadSites 优先读取）。
+// 站点增删改 rebuild.config.json，勿手动维护本函数与 config 的同步。
 function defaultSites() {
   const SITES = [];
   function site(name, dir, opts) { SITES.push(Object.assign({ name, dir, build: null, verify: [], deploy: [] }, opts)); }
@@ -326,6 +338,18 @@ function loadSites() {
       const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
       const arr = Array.isArray(raw) ? raw : (raw.sites || []);
       if (!Array.isArray(arr) || !arr.length) throw new Error('sites.json 结构无效');
+      if (process.env.SITES_ROOT && raw.sitesRoot) {
+        const root = process.env.SITES_ROOT.replace(/\\/g, '/');
+        const localRoot = raw.sitesRoot.replace(/\\/g, '/');
+        for (const s of arr) {
+          if (s.dir) s.dir = s.dir.replace(/\\/g, '/').replace(localRoot, root);
+          if (s.buildDir) s.buildDir = s.buildDir.replace(/\\/g, '/').replace(localRoot, root);
+          if (s.deploy) s.deploy = s.deploy.map((d) => d.replace(/\\/g, '/').replace(localRoot, root));
+          for (const key of ['verify', 'prechecks']) {
+            if (s[key]) s[key] = s[key].map((c) => { if (c.file) c.file = c.file.replace(/\\/g, '/'); return c; });
+          }
+        }
+      }
       return arr;
     } catch (e) {
       console.error(`[warn] 读取 ${CONFIG_PATH} 失败（${e.message}），回退到内置站点清单。`);
@@ -377,7 +401,30 @@ if (isMain && listOnly) {
 }
 
 // ---------- 执行 ----------
-if (isMain && daily) {
+if (isMain && watchMode) {
+  const watchFiles = sites.flatMap((s) => ['links-data.json', 'data.json', 'data.js'].map((f) => path.join(s.dir, f)).filter((p) => { try { return fs.existsSync(p); } catch (e) { return false; } }));
+  if (!watchFiles.length) { console.error(C.red('[error] 未找到可监听的数据文件')); process.exit(1); }
+  console.log(C.cyan(`[watch] 监听 ${watchFiles.length} 个数据文件，变化时自动校验（Ctrl+C 退出）...`));
+  let debounce = null;
+  for (const f of watchFiles) {
+    try {
+      fs.watch(f, () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(() => {
+          console.log(C.cyan(`\n[${ts()}] [watch] 检测到变化，重新校验...`));
+          const r = spawnSync(process.execPath, [__filename, '--verify-only', '--json'], { cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 5 * 60 * 1000 });
+          try {
+            const out = (r.stdout || '') + (r.stderr || '');
+            const json = JSON.parse(out.slice(out.indexOf('{')));
+            const passN = (json.sites || []).filter((s) => s.ok).length;
+            console.log(json.allOk ? C.green(`✓ 全部通过（${passN}/${(json.sites || []).length} 站）`) : C.red(`✗ 有失败（${passN}/${(json.sites || []).length} 站通过）`));
+          } catch (e) { console.log(C.red('解析输出失败')); }
+        }, 1000);
+      });
+    } catch (e) { /* 文件监听失败：跳过 */ }
+  }
+  setInterval(() => {}, 1000000);
+} else if (isMain && daily) {
   // 每日持久巡检：本地 verify + 线上 smoke + 线上断言 + deadline + 产物保护 → runs/ 落盘 + report.html
   (async () => {
     try {
@@ -420,18 +467,19 @@ if (!asJson) {
 
 const results = [];
 const tStart = Date.now();
-for (const s of sites) {
+for (let si = 0; si < sites.length; si++) {
+  const s = sites[si];
   const dir = s.buildDir || s.dir;
   let buildRes = null;
   let note = null;
 
   if (prebuildMode) {
     if (s.regen) {
-      process.stdout.write(`[${ts()}] [regen] ${s.name} ... `);
+      process.stdout.write(`[${ts()}] [${si+1}/${sites.length}] [regen] ${s.name} ... `);
       const t0 = Date.now();
       buildRes = run(s.regen[0], s.regen[1], dir);
       const sec = ((Date.now() - t0) / 1000).toFixed(1);
-      console.log(buildRes.ok ? `成功 (${sec}s)` : `失败 (${sec}s, exit ${buildRes.status})`);
+      console.log(buildRes.ok ? C.green(`✓ 成功 (${sec}s)`) : C.red(`✗ 失败 (${sec}s, exit ${buildRes.status})`));
       if (!buildRes.ok) {
         const lines = buildRes.tail.split('\n').filter((l) => l.trim()).slice(-8);
         for (const l of lines) console.log('        ' + l);
@@ -444,11 +492,11 @@ for (const s of sites) {
       if (!asJson) console.log(`[${ts()}] [skip] ${s.name}：${note}`);
     }
   } else if (s.build && !verifyOnly && (s.rebuild || buildSSR)) {
-    process.stdout.write(`[${ts()}] [build] ${s.name} ... `);
+    process.stdout.write(`[${ts()}] [${si+1}/${sites.length}] [build] ${s.name} ... `);
     const t0 = Date.now();
     buildRes = run(s.build[0], s.build[1], dir);
     const sec = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(buildRes.ok ? `成功 (${sec}s)` : `失败 (${sec}s, exit ${buildRes.status})`);
+    console.log(buildRes.ok ? C.green(`✓ 成功 (${sec}s)`) : C.red(`✗ 失败 (${sec}s, exit ${buildRes.status})`));
     if (!buildRes.ok) {
       const lines = buildRes.tail.split('\n').filter((l) => l.trim()).slice(-8);
       for (const l of lines) console.log('        ' + l);
@@ -460,6 +508,7 @@ for (const s of sites) {
 
   const vlist = prebuildMode ? (s.prechecks || s.verify) : s.verify;
   const checks = [];
+  const seenTitles = new Set();
   for (const c of vlist) {
     const abs = path.isAbsolute(c.file) ? c.file : path.join(s.dir, c.file);
     let ok = false, detail = '';
@@ -611,7 +660,132 @@ for (const s of sites) {
         + (checkAlt && noAlt.length ? `；缺alt ${noAlt.length}（${noAlt.slice(0, 3).join('; ')}…）` : '')
         + (!broken.length && (!checkAlt || !noAlt.length) ? '，链接与图片均正常' : '');
     }
-    checks.push({ desc: c.desc, ok, detail });
+    else if (c.type === 'mobile-friendly' || c.type === 'structured-data' || c.type === 'core-web-vitals' || c.type === 'hreflang' || c.type === 'faq-content' || c.type === 'semantic-html' || c.type === 'content-structure' || c.type === 'ai-citations' || c.type === 'twitter-card' || c.type === 'open-graph-enhanced' || c.type === 'anchor-text-quality' || c.type === 'image-lazy-load' || c.type === 'accessibility' || c.type === 'internal-links' || c.type === 'duplicate-content' || c.type === 'html-lang' || c.type === 'breadcrumb' || c.type === 'content-freshness' || c.type === 'robots-meta' || c.type === 'content-length' || c.type === 'pagination' || c.type === 'iframe-sandbox' || c.type === 'preload-hints' || c.type === 'image-format' || c.type === 'html-doctype' || c.type === 'viewport-scale') {
+      const o = (typeof c.pattern === 'object' && c.pattern) || {};
+      const pages = [];
+      for (const p of (o.pages || [])) {
+        if (p.includes('*')) {
+          const d = path.join(s.dir, path.dirname(p) === '.' ? '' : path.dirname(p));
+          const ext = p.slice(p.indexOf('*') + 1);
+          try { for (const f of fs.readdirSync(d)) if (f.endsWith(ext)) pages.push((path.dirname(p) + '/' + f).replace(/\\/g, '/').replace(/^\.\//, '')); }
+          catch (e) {}
+        } else { pages.push(p.replace(/\\/g, '/')); }
+      }
+      const issues = [];
+      for (const pg of pages) {
+        const html = readFile(path.join(s.dir, pg)) || '';
+        const bad = [];
+        if (c.type === 'mobile-friendly') {
+          const vp = (html.match(/<meta[^>]+name=["']viewport["'][^>]*>/i) || [])[0] || '';
+          const content = vp ? (vp.match(/content=["']([^"']*)["']/i) || [])[1] || '' : '';
+          if (!vp) bad.push('缺viewport');
+          else if (!content.includes('width=device-width') && !content.includes('initial-scale')) bad.push('viewport不合理');
+        } else if (c.type === 'structured-data') {
+          const lds = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+          if (!lds.length) bad.push('缺JSON-LD');
+          else { for (const m of lds) { try { const obj = JSON.parse(m[1]); const types = Array.isArray(obj['@type']) ? obj['@type'] : [obj['@type']].filter(Boolean); const reqs = { Article: ['headline','datePublished','author','image'], BreadcrumbList: ['itemListElement'], Organization: ['name','url','logo'], WebSite: ['name','url'] }; for (const t of types) { const r = reqs[t]; if (r) { const miss = r.filter((x) => !obj[x]); if (miss.length) bad.push(`${t}缺${miss.join('/')}`); } } } catch (e) { bad.push('JSON-LD解析失败'); } } }
+        } else if (c.type === 'core-web-vitals') {
+          const imgs = [...html.matchAll(/<img\b[^>]*>/gi)];
+          for (const m of imgs) { if (!m[0].match(/\bwidth=["']\d+["']/i) || !m[0].match(/\bheight=["']\d+["']/i)) { bad.push('图片缺width/height(CLS)'); break; } }
+          const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*>/gi)].map((m) => m[0]);
+          const blocking = scripts.filter((t) => !t.includes('defer') && !t.includes('async') && !t.includes('type="application/ld+json"'));
+          if (blocking.length > 1) bad.push(`${blocking.length}个阻塞script`);
+        } else if (c.type === 'hreflang') {
+          const alts = [...html.matchAll(/<link[^>]+rel=["']alternate["'][^>]+hreflang=["']([^"']+)["'][^>]*>/gi)];
+          if (!alts.length) bad.push('缺hreflang');
+          else if (!alts.some((m) => m[1] === 'x-default')) bad.push('缺x-default');
+        } else if (c.type === 'faq-content') {
+          const lds = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+          const hasFaq = lds.some((m) => { try { return JSON.parse(m[1])['@type'] === 'FAQPage'; } catch (e) { return false; } });
+          if (!hasFaq && !/<details\b/i.test(html) && !/<h[23][^>]*>[^<]*[?？]/i.test(html)) bad.push('缺FAQ/QA');
+        } else if (c.type === 'semantic-html') {
+          const stags = ['article', 'nav', 'section', 'main', 'header', 'footer'];
+          const missing = stags.filter((t) => !new RegExp('<' + t + '\\b', 'i').test(html));
+          if (missing.length) bad.push(`缺${missing.join('/')}`);
+        } else if (c.type === 'content-structure') {
+          const h1s = [...html.matchAll(/<h1\b[^>]*>/gi)];
+          if (!h1s.length) bad.push('缺H1');
+          else if (h1s.length > 1) bad.push(`H1不唯一(${h1s.length})`);
+          const hs = [...html.matchAll(/<h([1-6])\b[^>]*>/gi)].map((m) => +m[1]);
+          for (let i = 1; i < hs.length; i++) { if (hs[i] > hs[i - 1] + 1) { bad.push(`跳级(H${hs[i-1]}→H${hs[i]})`); break; } }
+        } else if (c.type === 'ai-citations') {
+          if (!/<blockquote\b/i.test(html) && !/<cite\b/i.test(html) && !/<a\b[^>]*href=["']https?:\/\//i.test(html)) bad.push('缺引用/来源');
+        } else if (c.type === 'twitter-card') {
+          const tcReq = ['twitter:card', 'twitter:title', 'twitter:description'];
+          const missing = tcReq.filter((t) => !new RegExp('<meta[^>]+name=["\']' + t + '["\']', 'i').test(html));
+          if (missing.length) bad.push(`缺${missing.join('/')}`);
+        } else if (c.type === 'open-graph-enhanced') {
+          const ogEnh = ['og:type', 'og:site_name', 'og:locale'];
+          const missing = ogEnh.filter((t) => !new RegExp('<meta[^>]+property=["\']' + t + '["\']', 'i').test(html));
+          if (missing.length) bad.push(`缺${missing.join('/')}`);
+        } else if (c.type === 'anchor-text-quality') {
+          const badT = ['点击这里','了解更多','查看更多','这里','更多','详情','点击','link','here','more','click','click here','read more','查看详情','点击查看'];
+          const anchors = [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((m) => m[1].trim().toLowerCase()).filter((t) => t && t.length < 20);
+          const badAnchors = anchors.filter((t) => badT.includes(t));
+          if (badAnchors.length) bad.push(`泛化锚文本${badAnchors.length}个`);
+        } else if (c.type === 'image-lazy-load') {
+          const imgs = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]);
+          const nonLazy = imgs.filter((t) => !t.match(/\bloading=["']lazy["']/i));
+          if (nonLazy.length > 2) bad.push(`${nonLazy.length}个图片缺loading=lazy`);
+        } else if (c.type === 'accessibility') {
+          const btns = [...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/gi)];
+          for (const m of btns) { if (!/aria-label=/i.test(m[1]) && !m[2].trim()) { bad.push('按钮缺aria-label'); break; } }
+          const links = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+          for (const m of links) { if (!m[2].trim() && !/aria-label=/i.test(m[1])) { bad.push('链接缺文本'); break; } }
+        } else if (c.type === 'internal-links') {
+          const links = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].map((m) => m[1]);
+          const internal = links.filter((h) => !h.startsWith('http') && !h.startsWith('#'));
+          if (internal.length < 3) bad.push(`内链${internal.length}个`);
+        } else if (c.type === 'duplicate-content') {
+          const title = (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || '';
+          if (title && seenTitles.has(title)) bad.push(`title重复`);
+          if (title) seenTitles.add(title);
+        } else if (c.type === 'html-lang') {
+          const m = html.match(/<html\b([^>]*)>/i);
+          if (!m || !/lang=["']/i.test(m[1] || '')) bad.push('缺lang属性');
+        } else if (c.type === 'breadcrumb') {
+          if (!/BreadcrumbList/i.test(html) && !/breadcrumb/i.test(html)) bad.push('缺面包屑');
+        } else if (c.type === 'content-freshness') {
+          if (!/article:(published|modified)_time/i.test(html) && !/date(Published|Modified)/i.test(html)) bad.push('缺日期标记');
+        } else if (c.type === 'robots-meta') {
+          const rm = html.match(/<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["']/i);
+          if (rm && /noindex|nofollow/i.test(rm[1])) bad.push(`robots:${rm[1]}`);
+        } else if (c.type === 'content-length') {
+          const text = html.replace(/<[^>]+>/g, '').trim();
+          if (text.length < 300) bad.push(`内容${text.length}字`);
+        } else if (c.type === 'pagination') {
+          if (!/rel=["']prev["']/i.test(html) && !/rel=["']next["']/i.test(html)) bad.push('缺分页标记');
+        } else if (c.type === 'iframe-sandbox') {
+          const iframes = [...html.matchAll(/<iframe\b([^>]*)>/gi)].map((m) => m[1] || '');
+          if (iframes.some((a) => !/\bsandbox\b/i.test(a))) bad.push('iframe缺sandbox');
+        } else if (c.type === 'preload-hints') {
+          if (!/rel=["']preload["']/i.test(html) && !/rel=["']preconnect["']/i.test(html)) bad.push('缺preload/preconnect');
+        } else if (c.type === 'image-format') {
+          const srcs = [...html.matchAll(/<img\b[^>]*src=["']([^"']+)["']/gi)].map((m) => m[1]);
+          if (srcs.filter((s) => /\.(png|jpg|jpeg|gif|bmp)/i.test(s)).length > 2) bad.push('传统格式图片过多');
+        } else if (c.type === 'html-doctype') {
+          if (!/<!DOCTYPE\s+html>/i.test(html)) bad.push('缺DOCTYPE');
+        } else if (c.type === 'viewport-scale') {
+          const vp = (html.match(/<meta[^>]+name=["']viewport["'][^>]*>/i) || [])[0] || '';
+          if (!vp) bad.push('缺viewport');
+          else if (!/initial-scale=/i.test(vp)) bad.push('缺initial-scale');
+        }
+        if (bad.length) issues.push(`${pg}: ${bad.join('、')}`);
+      }
+      ok = !issues.length;
+      detail = `页面 ${pages.length} 个` + (issues.length ? `；${issues.length} 个有问题（${issues.slice(0, 3).join('; ')}${issues.length > 3 ? '…' : ''}）` : '，全部通过');
+    }
+    else if (c.type === 'security-headers') {
+      ok = true; detail = '本地不检查 HTTP 头（线上巡检覆盖）';
+    }
+    else if (c.type === 'ai-crawlable') {
+      const robotsPath = path.join(s.dir, c.file || 'public/robots.txt');
+      const robotsTxt = readFile(robotsPath) || readFile(path.join(s.dir, 'robots.txt')) || '';
+      const bots = ['GPTBot', 'CCBot', 'PerplexityBot', 'Google-Extended', 'ClaudeBot'];
+      const blocked = bots.filter((b) => new RegExp('User-agent:\\s*' + b + '[\\s\\S]*?Disallow:\\s*/\\s', 'i').test(robotsTxt + '\n'));
+      ok = !blocked.length; detail = blocked.length ? `禁止 AI 爬虫 ${blocked.length} 个（${blocked.join(', ')}）` : `AI 爬虫可抓取（检查 ${bots.length} 个）`;
+    }
+    checks.push({ desc: c.desc, type: c.type, ok, detail });
   }
   results.push({ name: s.name, buildRes, note, checks });
 }
@@ -647,15 +821,15 @@ for (const r of results) {
   const cTotal = r.checks.length;
   const ok = (!r.buildRes || r.buildRes.ok) && cOk === cTotal;
   if (!ok) allOk = false;
-  console.log(pad(r.name, 24) + pad(b, 10) + pad(`${cOk}/${cTotal}`, 8) + (ok ? '通过' : '★失败'));
+  console.log(pad(r.name, 24) + pad(b === '成功' ? C.green(b) : b === '失败' ? C.red(b) : b === '跳过' ? C.yellow(b) : b, 10) + pad(`${cOk}/${cTotal}`, 8) + (ok ? C.green('通过') : C.red('★失败')));
 }
 
 const failed = results.filter((r) => !r.checks.every((x) => x.ok));
 if (failed.length) {
-  console.log('\n=== 未通过的校验项 ===');
+  console.log(C.red('\n=== 未通过的校验项 ==='));
   for (const r of failed) {
     for (const c of r.checks) {
-      if (!c.ok) console.log(`  [${r.name}] ${c.desc}：${c.detail}`);
+      if (!c.ok) console.log(C.red(`  [${r.name}] ${c.desc}：${c.detail}`));
     }
   }
 }

@@ -416,7 +416,8 @@ const RUNTIME_JS = `
 `;
 
 /* ---------- HTML 骨架 ---------- */
-function headHtml({ title, description, canonical, ogTitle }) {
+function headHtml({ title, description, canonical, ogTitle, base = '', jsonLd = [] }) {
+  const ld = jsonLd.map((obj) => '<script type="application/ld+json">' + JSON.stringify(obj).replace(/<\//g, '<\\/') + '</script>').join('\n');
   return `<!DOCTYPE html>
 <html lang="zh-CN" data-theme="light">
 <head>
@@ -432,7 +433,7 @@ function headHtml({ title, description, canonical, ogTitle }) {
 <meta name="geo.position" content="39.9042;116.4074">
 <meta name="ICBM" content="39.9042, 116.4074">
 <link rel="alternate" hreflang="zh-CN" href="${esc(canonical)}">
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/svg+xml" href="${base}favicon.svg">
 <meta name="theme-color" content="#FF6B35">
 <meta name="application-name" content="券宝">
 <meta property="og:title" content="${esc(ogTitle || title)}">
@@ -447,6 +448,7 @@ function headHtml({ title, description, canonical, ogTitle }) {
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="https://wcbblll.cc/favicon.svg">
 <style>${CSS}</style>
+${ld}
 </head>`;
 }
 
@@ -514,6 +516,16 @@ function buildIndex() {
     title: '券宝 — 优惠链接导航 · 电商/出行/会员/生活优惠一站直达',
     description: '券宝优惠链接导航：汇集京东、淘宝、拼多多、携程、美团等平台优惠，影视音乐会员、随身WiFi、号卡办理一站直达。实时更新，免费使用。',
     canonical: SITE + '/',
+    jsonLd: [{
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: '券宝 — 优惠链接导航',
+      alternateName: '券宝',
+      url: SITE + '/',
+      description: '券宝优惠链接导航：汇集京东、淘宝、拼多多、携程、美团等平台优惠，影视音乐会员、随身WiFi、号卡办理一站直达。实时更新，免费使用。',
+      inLanguage: 'zh-CN',
+      publisher: { '@type': 'Organization', name: '券宝', url: SITE + '/' },
+    }],
   }) + `
 <body data-page="home">
 ${headerHtml({ home: true })}
@@ -557,6 +569,26 @@ function buildCategory(cat) {
     description: `${cm.name}分类：${intro.slice(0, 80)}…数据更新于 ${UPDATED}。`,
     canonical: `${SITE}/category/${cat}.html`,
     ogTitle: `券宝 · ${cm.name}优惠链接导航`,
+    base: '../',
+    jsonLd: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: `券宝 · ${cm.name}优惠链接导航`,
+        url: `${SITE}/category/${cat}.html`,
+        description: `${cm.name}分类优惠链接导航，共收录 ${list.length} 条优惠入口。`,
+        inLanguage: 'zh-CN',
+        isPartOf: { '@type': 'WebSite', name: '券宝', url: SITE + '/' },
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '首页', item: SITE + '/' },
+          { '@type': 'ListItem', position: 2, name: cm.name, item: `${SITE}/category/${cat}.html` },
+        ],
+      },
+    ],
   }) + `
 <body data-page="category">
 ${headerHtml({ home: false })}

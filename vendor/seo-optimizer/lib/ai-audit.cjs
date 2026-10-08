@@ -4,77 +4,255 @@
  * 定位：不进入产物生成路径；仅对巡检发现问题（issues）生成"修复建议/定位提示"，
  *       辅助人工判断"要改哪些坏东西"。显式 --ai-audit 才启用。
  *
- * 提供方：Cloudflare Workers AI 免费模型（与 auto-ai-article/src/ai-fallback.ts 同机制：
- *         FREE_TEXT_MODELS 中文优先降级链 + 超时/门禁），每模型每日 10,000 neurons 免费。
+ * 多提供方统一降级（移植 auto-ai-article/src/ai-fallback.ts 逻辑）：
+ *   1. Cloudflare Workers AI 免费模型链（FREE_TEXT_MODELS，中文优先，每日 10,000 neurons/模型）
+ *   2. OpenAI 兼容备用提供方（哪个配了 key 用哪个，按优先级）：
+ *        OPENROUTER_API_KEY  → OpenRouter（https://openrouter.ai/api/v1）
+ *        DASHSCOPE_API_KEY   → 阿里百炼（https://dashscope.aliyuncs.com/compatible-mode/v1）
+ *        GEMINI_API_KEY      → Google Gemini OpenAI 兼容端点（https://generativelanguage.googleapis.com/v1beta/openai）
+ *        MISTRAL_API_KEY     → Mistral（https://api.mistral.ai/v1）
+ *        CEREBRAS_API_KEY    → Cerebras（https://api.cerebras.ai/v1）
+ *        LLM_API_KEY         → 自定义 OpenAI 兼容（配合 LLM_BASE_URL）
+ *   CF 全部失败（额度/限流/超时等）后自动切换备用提供方；全部失败则跳过不阻塞巡检。
  *
- * 配置（环境变量）：
- *   CF_API_TOKEN   Cloudflare API Token（AI 推理权限）
- *   CF_ACCOUNT_ID  Cloudflare Account ID
- *   未配置时 --ai-audit 跳过并提示（不阻塞巡检）。
+ * 配置（环境变量，seo-optimizer/.env 或 --env-file 加载）：
+ *   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID（或 CF_API_TOKEN / CF_ACCOUNT_ID）
+ *   以及上方任一备用提供方 key。
+ *   未配置任何凭证时 --ai-audit 跳过并提示。
  */
 'use strict';
 
-const FREE_TEXT_MODELS = [
-  'qwen3.8-27b',
-  'zai-org/glm-5.3',
-  'deepseek-v4-pro-0813',
-  'moonshotai/kimi-k2.6',
-  'qwen3-30b-a3b-fp8',
-  'glm-5.2',
-  'deepseek-v4-flash',
-  'kimi-k2.7-code',
-  'glm-5.3-flash',
-  'qwen2.5-coder-32b',
-  'llama-4-scout',
-  'gpt-oss-120b',
-  'glm-4.7-flash',
-  'mistral-small-3.1',
-  'llama-3.3-70b',
-];
+const fs = require('fs');
+const path = require('path');
 
+// —— AI 模型/提供方配置：唯一事实源 auto-ai-article/src/ai-config.ts
+//    通过 vendor/ai-article-pipeline 引用（file: 依赖），改模型只改 auto-ai-article 一处
+const { FREE_TEXT_MODELS, OPENROUTER_FREE_MODELS, FALLBACK_PROVIDERS } = require('ai-article-pipeline/ai-config');
+
+// —— 凭证读取 ——
 function cfg() {
-  return { apiToken: process.env.CF_API_TOKEN, accountId: process.env.CF_ACCOUNT_ID };
+  return {
+    apiToken: process.env.CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN || null,
+    accountId: process.env.CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || null,
+  };
 }
 
-async function aiComplete(model, prompt, { apiToken, accountId, timeoutMs }) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), timeoutMs || 120000);
-  try {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
-      {
+// —— 当天失败记忆（runs/bad-ai-models.json，跨进程当天复用）——
+function badModelStore() {
+  const file = path.join(__dirname, '..', 'runs', 'bad-ai-models.json');
+  return {
+    load() {
+      try { const d = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(d) ? d : null; } catch { return null; }
+    },
+    save(list) {
+      try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(list)); } catch {}
+    },
+  };
+}
+
+// —— 响应提取（兼容 CF 与 OpenAI 兼容格式）——
+function extractResponse(data) {
+  if (typeof data === 'string') return data;
+  const pick = (v) => (typeof v === 'string' && v.trim() ? v : '');
+  const r1 = pick(data && data.result && data.result.response); if (r1) return r1;
+  const r2 = pick(data && data.result); if (r2) return r2;
+  const r3 = pick(data && data.result && data.result.choices && data.result.choices[0] && data.result.choices[0].message && data.result.choices[0].message.content); if (r3) return r3;
+  if (Array.isArray(data && data.result)) { const r4 = pick(data.result[0] && data.result[0].content); if (r4) return r4; }
+  const r5 = pick(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content); if (r5) return r5;
+  const r6 = pick(data && data.response); if (r6) return r6;
+  const r7 = pick(data && data.result && data.result.choices && data.result.choices[0] && data.result.choices[0].message && data.result.choices[0].message.reasoning_content); if (r7) return r7;
+  const r8 = pick(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.reasoning_content); if (r8) return r8;
+  return pick(data && data.result && data.result.content) || pick(data && data.result && data.result.text) || pick(data && data.text) || '';
+}
+
+// —— 错误分类 ——
+function classifyError(err) {
+  const msg = String((err && err.message) || '').toLowerCase();
+  if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) return 'timeout';
+  if (msg.includes('rate') || msg.includes('429')) return 'rate_limit';
+  if (msg.includes('quota') || msg.includes('exceeded') || msg.includes('not verified') || msg.includes('402') || msg.includes('insufficient credits')) return 'quota_exceeded';
+  if (msg.includes('timeout') || msg.includes('timed out')) return 'timeout';
+  if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('server')) return 'server_error';
+  if (msg.includes('400') || msg.includes('invalid') || msg.includes('bad request') || msg.includes('401') || msg.includes('unauthorized')) return 'invalid_request';
+  return 'unknown';
+}
+
+function isDeterministicFailure(err) {
+  const reason = classifyError(err);
+  if (['quota_exceeded', 'rate_limit', 'timeout', 'invalid_request'].includes(reason)) return true;
+  return /被截断|没有返回内容|过短|结尾不完整/.test(err.message || '');
+}
+
+// —— CF Workers AI 客户端（单模型）——
+function cfClient(model, { apiToken, accountId, timeoutMs, maxTokens }) {
+  return async (messages) => {
+    const body = { messages, max_tokens: maxTokens || 15360 };
+    if (model.noThinking) body.chat_template_kwargs = { thinking: false };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('AI 请求超时', 'TimeoutError')), timeoutMs || 120000);
+    try {
+      const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model.id}`, {
         method: 'POST',
-        signal: ctl.signal,
         headers: { 'Authorization': 'Bearer ' + apiToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], max_tokens: 600, chat_template_kwargs: { thinking: false } }),
-      }
-    );
-    const data = await res.json();
-    const text = data && data.result && (data.result.response || data.result.text || '');
-    return { ok: !!text, text: String(text || '').trim() };
-  } catch (e) {
-    return { ok: false, text: '', error: e.name === 'AbortError' ? 'timeout' : e.message };
-  } finally {
-    clearTimeout(timer);
-  }
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+      const data = await res.json();
+      const content = extractResponse(data);
+      if (!content) throw new Error('AI 没有返回内容');
+      const fr = data && data.result && data.result.choices && data.result.choices[0] && data.result.choices[0].finish_reason;
+      if (fr === 'length') throw new Error('AI 输出被截断（finish_reason=length）');
+      return content;
+    } finally { clearTimeout(timer); }
+  };
 }
 
-// 对问题清单生成修复建议：按模型降级链逐个尝试，首个产出非空即用
-async function auditIssues(issues, opts) {
+// —— OpenAI 兼容客户端（备用提供方）——
+function oaiClient(baseUrl, apiKey, model, timeoutMs) {
+  return async (messages) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('AI 请求超时', 'TimeoutError')), timeoutMs || 120000);
+    try {
+      const res = await fetch(`${(baseUrl || '').replace(/\/+$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(apiKey ? { 'Authorization': 'Bearer ' + apiKey } : {}) },
+        body: JSON.stringify({ model, messages, max_tokens: 15360, stream: false }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+      const data = await res.json();
+      const content = extractResponse(data);
+      if (!content) throw new Error('AI 没有返回内容');
+      return content;
+    } finally { clearTimeout(timer); }
+  };
+}
+
+// —— 统一降级链：CF 15 模型 → 备用提供方 ——
+function createUnifiedClient(opts) {
   const o = opts || {};
   const c = cfg();
-  if (!c.apiToken || !c.accountId) {
-    return { enabled: false, note: '未配置 CF_API_TOKEN / CF_ACCOUNT_ID，AI 审计跳过（不影响巡检）' };
+  const store = badModelStore();
+  const badModels = new Set(store.load() || []);
+  const quotaExhausted = new Set();
+  const log = (...args) => console.log(new Date().toISOString(), '[ai-audit]', ...args);
+  const minLength = o.minLength || 20;
+
+  function endingOk(content) {
+    const tail = content.trim().replace(/`{3,}/g, '').trim();
+    return /[。！？…!?.]$/.test(tail) || /https?:\/\/\S+$/.test(tail);
   }
-  const prompt = `你是 SEO 工程师。以下是一次多站点 SEO 巡检发现的问题（9 字段：site/type/severity/expect/actual/fixSource），请针对每条给出：可能根因、具体修复动作、修复后如何验证。用中文，简洁分点，每条不超过 80 字。\n\n${JSON.stringify((issues || []).slice(0, o.limit || 10), null, 2)}`;
-  for (const model of (o.models || FREE_TEXT_MODELS)) {
-    const r = await aiComplete(model, prompt, { ...c, timeoutMs: o.timeoutMs || 120000 });
-    if (r.ok && r.text.length >= (o.minLength || 20)) {
-      return { enabled: true, model, advice: r.text };
+
+  async function tryClient(client, label, messages) {
+    try {
+      const content = await client(messages);
+      if (content.trim().length < minLength) throw new Error(`内容过短(${content.trim().length}字 < ${minLength})`);
+      if (o.requireEnding && !endingOk(content)) throw new Error('内容被截断(结尾不完整)');
+      return { ok: true, content, label };
+    } catch (e) {
+      const reason = classifyError(e);
+      log(`失败：${label}（${reason}）: ${e.message.slice(0, 120)}`);
+      if (reason === 'quota_exceeded' || reason === 'invalid_request') {
+        // 记录当天失败：同一进程/当天不再尝试
+        badModels.add(label);
+        store.save([...badModels]);
+      }
+      return { ok: false, reason, error: e.message };
     }
-    if (r.error) continue;
   }
-  return { enabled: true, model: null, note: '全部免费模型未产出有效建议（当日额度或网络）' };
+
+  return async (messages) => {
+    // 1. CF 免费模型链（未标记当天失败的）
+    const c = cfg();
+    if (c.apiToken && c.accountId) {
+      const models = FREE_TEXT_MODELS.filter((m) => !badModels.has(m.id)).sort((a, b) => a.priority - b.priority);
+      for (const model of models) {
+        const r = await tryClient(cfClient(model, { apiToken: c.apiToken, accountId: c.accountId, timeoutMs: o.timeoutMs }), model.id, messages);
+        if (r.ok) return { ok: true, content: r.content, provider: 'Cloudflare Workers AI', model: model.id };
+        if (isDeterministicFailure(new Error(r.error))) { badModels.add(model.id); store.save([...badModels]); }
+      }
+      log('CF 免费模型链全部失败，切换备用提供方');
+    }
+
+    // 2. 备用提供方（有 key 且非当天失败；每个提供方内按模型链降级）
+    for (const p of FALLBACK_PROVIDERS) {
+      const key = process.env[p.envKey];
+      if (!key || badModels.has(p.name)) continue;
+      const baseUrl = p.name === '自定义 OpenAI 兼容' ? (process.env[p.baseUrl] || 'https://api.openai.com/v1') : p.baseUrl;
+      let providerAuthFailed = false;
+      for (const model of p.models) {
+        const resolved = p.name === '自定义 OpenAI 兼容' ? (process.env[model] || 'gpt-4o-mini') : model;
+        const r = await tryClient(oaiClient(baseUrl, key, resolved, o.timeoutMs), `${p.name}/${resolved}`, messages);
+        if (r.ok) return { ok: true, content: r.content, provider: p.name, model: resolved };
+        // 认证类失败（401/403：key 无效/域名未验证）→ 换提供方无意义，整体放弃
+        if (/401|403|unauthorized|forbidden/.test(String(r.error || ''))) { providerAuthFailed = true; break; }
+        // 其余（402 无额度/404 模型下架/429 限流/5xx/超时/内容不合格）→ 继续下一模型（:free 模型无需 credits）
+      }
+      if (providerAuthFailed && p.models.length > 1) continue;
+    }
+
+    const cfConfigured = c.apiToken && c.accountId;
+    const fallbackConfigured = FALLBACK_PROVIDERS.some((p) => process.env[p.envKey] && !badModels.has(p.name));
+    return { ok: false, reason: 'all_failed', note: cfConfigured ? (fallbackConfigured ? '所有提供方失败（额度/网络/当天失败记忆）' : 'CF 失败且未配置备用提供方（添加 OPENROUTER_API_KEY / DASHSCOPE_API_KEY 等后自动启用）') : '未配置任何 AI 凭证，AI 审计跳过（不影响巡检）' };
+  };
 }
 
-module.exports = { auditIssues, FREE_TEXT_MODELS, cfg };
+// —— AI 建议质量评分（0-100） ——
+function scoreAdvice(advice, issueCount) {
+  let score = 0;
+  const reasons = [];
+  if (/修复|添加|删除|修改|设置|配置|修正|补全|缩短|扩充/.test(advice)) { score += 30; reasons.push('含具体动作'); }
+  else { reasons.push('缺具体动作'); }
+  if (/验证|重跑|确认|检查|部署后/.test(advice)) { score += 20; reasons.push('含验证步骤'); }
+  else { reasons.push('缺验证步骤'); }
+  if (/\.html|\.json|\.js|wrangler|meta|title|link|script|sitemap|viewport|alt|canonical/.test(advice)) { score += 20; reasons.push('引用正确文件/标签'); }
+  else { reasons.push('未引用具体文件'); }
+  const lines = advice.split('\n').filter((l) => l.trim());
+  if (issueCount && lines.length >= issueCount) { score += 15; reasons.push('按问题逐条回复'); }
+  else { reasons.push('未逐条回复'); }
+  if (advice.length >= 80 && advice.length <= 1000) { score += 15; reasons.push('长度合理'); }
+  else { reasons.push('长度异常'); }
+  return { score, reasons };
+}
+
+// —— 对问题清单生成修复建议（模板优先 + AI 降级 + 质量评分） ——
+async function auditIssues(issues, opts) {
+  const o = opts || {};
+  const all = issues || [];
+
+  // 1. 模板匹配（零成本确定性诊断）
+  const { classifyIssues } = require('./issue-templates.cjs');
+  const classified = classifyIssues(all.slice(0, o.limit || 10));
+  const templated = classified.filter((i) => i.template);
+  const unmatched = classified.filter((i) => !i.template);
+
+  const result = {
+    enabled: true,
+    templated: templated.map((i) => ({ site: i.site, type: i.type, actual: i.actual, fix: i.template.fix, verify: i.template.verify })),
+    unmatchedCount: unmatched.length,
+  };
+
+  // 2. 未匹配问题调 AI 生成建议
+  if (!unmatched.length) {
+    return Object.assign(result, { advice: null, note: '全部问题已由模板匹配，无需 AI 诊断' });
+  }
+
+  const c = cfg();
+  const anyConfigured = (c.apiToken && c.accountId) || FALLBACK_PROVIDERS.some((p) => process.env[p.envKey]);
+  if (!anyConfigured) {
+    return Object.assign(result, { advice: null, note: '未配置 AI 凭证，未匹配问题跳过 AI 诊断（不影响巡检）' });
+  }
+
+  const prompt = `你是 SEO 工程师。以下是 SEO 巡检发现的问题，请针对每条给出：可能根因、具体修复动作、修复后如何验证。用中文，简洁分点，每条不超过 80 字。\n\n${JSON.stringify(unmatched, null, 2)}`;
+  const messages = [{ role: 'user', content: prompt }];
+  const client = createUnifiedClient(o);
+  const r = await client(messages);
+  if (r.ok) {
+    const quality = scoreAdvice(r.content, unmatched.length);
+    return Object.assign(result, { provider: r.provider, model: r.model, advice: r.content, quality });
+  }
+  return Object.assign(result, { advice: null, note: r.note });
+}
+
+module.exports = { auditIssues, scoreAdvice, FREE_TEXT_MODELS, cfg, createUnifiedClient, classifyError, extractResponse };

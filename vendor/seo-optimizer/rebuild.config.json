@@ -1,4 +1,6 @@
-[
+{
+  "sitesRoot": "E:\\code",
+  "sites": [
   {
     "name": "wcbblll_cc",
     "dir": "E:\\code\\wcbblll_cc",
@@ -79,6 +81,24 @@
         "type": "contains",
         "file": "wrangler.jsonc",
         "pattern": "\"404-page\""
+      },
+      {
+        "desc": "移动端适配(viewport)",
+        "type": "mobile-friendly",
+        "file": "index.html",
+        "pattern": { "pages": ["index.html", "category/*.html"] }
+      },
+      {
+        "desc": "结构化数据深度校验",
+        "type": "structured-data",
+        "file": "index.html",
+        "pattern": { "pages": ["index.html", "category/*.html"] }
+      },
+      {
+        "desc": "Core Web Vitals(CLS/阻塞script)",
+        "type": "core-web-vitals",
+        "file": "index.html",
+        "pattern": { "pages": ["index.html", "category/*.html"] }
       }
     ],
     "deploy": [
@@ -736,4 +756,5 @@
     "rebuild": false,
     "onlineBase": null
   }
-]
+  ]
+}

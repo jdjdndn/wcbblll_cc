@@ -9,6 +9,11 @@
     "sync": "node sync-lib.cjs",
     "sync:dry": "node sync-lib.cjs --dry-run",
     "verify": "node rebuild-all.cjs --verify-only",
-    "list": "node rebuild-all.cjs --list"
+    "list": "node rebuild-all.cjs --list",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
   }
 }

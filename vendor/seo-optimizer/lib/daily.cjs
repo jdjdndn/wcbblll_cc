@@ -136,29 +136,59 @@ function renderReport(rec) {
     if (dl && dl.expired > 0) bad.push(`过期${dl.expired}`);
     return `<tr><td>${esc(o.site)}</td><td class="${lv && lv.checks.every((c) => c.ok) ? 'ok' : 'bad'}">${lvTxt}</td><td class="${smOk ? 'ok' : 'bad'}">${smTxt}</td><td class="${ov && ov.checks.every((c) => c.ok) ? 'ok' : 'bad'}">${ovTxt}</td><td class="${dl && dl.expired ? 'bad' : 'ok'}">${dlTxt}</td><td>${bad.length ? esc(bad.join('、')) : '✓'}</td></tr>`;
   }).join('\n');
+  const issueHtml = (rec.issues || []).map((i) => {
+    const sev = i.severity || 'mid';
+    const sevCls = sev === 'high' ? 's-high' : sev === 'low' ? 's-low' : 's-mid';
+    const det = [
+      `<span class="k">期望</span><span class="v">${esc(i.expect || '—')}</span>`,
+      `<span class="k">实际</span><span class="v">${esc(i.actual || '—')}</span>`,
+      i.fixHint ? `<span class="k">修复</span><span class="v">${esc(i.fixHint)}</span>` : '',
+      i.verifyAfter ? `<span class="k">验证</span><span class="v">${esc(i.verifyAfter)}</span>` : '',
+    ].filter(Boolean).join('');
+    return `<div class="issue"><div class="ih"><span class="sev ${sevCls}">${esc(sev)}</span><b>${esc(i.site)}</b><span class="ity">${esc(i.type || '')}</span></div><div class="id">${det}</div></div>`;
+  }).join('\n');
+  const issuesJson = esc(JSON.stringify(rec.issues || []));
   return `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>seo-optimizer 巡检看板</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>seo-optimizer 巡检看板</title>
 <style>
-body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:24px;background:#f6f8fa;color:#24292f}
-h1{font-size:20px}.card{background:#fff;border:1px solid #d0d7de;border-radius:8px;padding:16px;margin-bottom:16px}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;white-space:nowrap}
-th{background:#f0f3f6}.ok{color:#1a7f37}.bad{color:#cf222e;font-weight:600}
-.sum{color:#57606a;font-size:12px;margin-bottom:8px}
+:root{--bg:#f6f8fa;--card-bg:#fff;--border:#d0d7de;--text:#24292f;--muted:#57606a;--th-bg:#f0f3f6;--ok:#1a7f37;--bad:#cf222e;--issue-bd:#eef1f4}
+.dark{--bg:#0d1117;--card-bg:#161b22;--border:#30363d;--text:#c9d1d9;--muted:#8b949e;--th-bg:#21262d;--ok:#3fb950;--bad:#f85149;--issue-bd:#21262d}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:0;background:var(--bg);color:var(--text)}
+.wrap{max-width:1080px;margin:0 auto;padding:16px 14px 48px;box-sizing:border-box}
+h1{font-size:20px;margin:6px 0 14px}.card{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px}
+.sum{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--muted);font-size:13px}.sum b{color:var(--text)}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid var(--border);padding:6px 10px;text-align:left}th{background:var(--th-bg)}
+.ok{color:var(--ok)}.bad{color:var(--bad);font-weight:600}
+.issue{padding:10px 0;border-bottom:1px solid var(--issue-bd)}.ih{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+.sev{font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;text-transform:uppercase}
+.s-high{background:#ffebe9;color:#cf222e}.s-mid{background:#fff8c5;color:#9a6700}.s-low{background:#f0f3f6;color:#57606a}
+.ity{color:var(--muted);font-size:12px;background:var(--th-bg);border-radius:4px;padding:1px 6px}
+.id{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:6px;font-size:12px;line-height:1.6}.id .k{color:var(--muted)}.id .v{color:var(--text);overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%}
+.btn-sm{font-size:12px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);border-radius:5px;padding:3px 10px;cursor:pointer}.btn-sm:hover{background:var(--th-bg)}
+.ch{display:flex;align-items:center;gap:10px}
 </style></head><body>
-<h1>seo-optimizer 巡检看板</h1>
-<div class="card sum">巡检时间：${esc(rec.ts)} ｜ 本地校验 allOk=${rec.localVerify.allOk} ｜ 线上 smoke 通过 ${rec.online.filter((o) => o.smoke.length && o.smoke.every((x) => x.ok)).length}/${rec.online.filter((o) => o.smoke.length).length} 站 ｜ 线上断言 ${rec.online.filter((o) => o.onlineVerify && o.onlineVerify.checks.every((c) => c.ok)).length}/${rec.online.filter((o) => o.onlineVerify).length} 站 ｜ 过期链接 ${rec.deadline.reduce((a, d) => a + d.expired, 0)} 条</div>
+<div class="wrap">
+<div style="display:flex;align-items:center;justify-content:space-between"><h1 style="margin:0">seo-optimizer 巡检看板</h1><div><button class="btn-sm" id="themeBtn">🌙 暗色</button><button class="btn-sm" onclick="exportJSON()">导出 JSON</button><button class="btn-sm" onclick="exportCSV()">导出 CSV</button></div></div>
+<div class="card sum"><span>巡检时间：<b>${esc(rec.ts)}</b></span><span>本地校验：<b class="${rec.localVerify.allOk ? 'ok' : 'bad'}">${rec.localVerify.allOk ? '通过' : '有失败'}</b></span><span>线上 smoke：<b>${rec.online.filter((o) => o.smoke.length && o.smoke.every((x) => x.ok)).length}/${rec.online.filter((o) => o.smoke.length).length}</b> 站</span><span>线上断言：<b>${rec.online.filter((o) => o.onlineVerify && o.onlineVerify.checks.every((c) => c.ok)).length}/${rec.online.filter((o) => o.onlineVerify).length}</b> 站</span><span>过期链接：<b>${rec.deadline.reduce((a, d) => a + d.expired, 0)}</b> 条</span><span>问题：<b>${(rec.issues || []).length}</b> 条</span></div>
 <div class="card"><table><thead><tr><th>站点</th><th>本地校验</th><th>线上smoke</th><th>线上断言</th><th>过期/deadline</th><th>问题</th></tr></thead><tbody>
 ${rows}
 </tbody></table></div>
-<div class="card"><b>问题明细（9 字段规范：site/page/type/severity/expect/actual/fix-source/fix-hint/verify-after）</b><pre style="font-size:12px;white-space:pre-wrap">${esc(JSON.stringify(rec.issues, null, 2))}</pre></div>
+<div class="card"><div class="ch"><b>问题明细</b></div><div style="margin-top:8px">${issueHtml || '<div class="ok">无问题，全部通过 ✓</div>'}</div></div>
+</div>
+<script>
+var _issues=${issuesJson};
+(function(){var b=document.getElementById('themeBtn'),d=document.body;if(localStorage.getItem('theme')==='dark'){d.classList.add('dark');b.textContent='☀️ 亮色';}b.addEventListener('click',function(){d.classList.toggle('dark');var isDark=d.classList.contains('dark');b.textContent=isDark?'☀️ 亮色':'🌙 暗色';localStorage.setItem('theme',isDark?'dark':'light');});})();
+function exportJSON(){var blob=new Blob([JSON.stringify(_issues,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='issues.json';a.click();}
+function exportCSV(){var headers=['site','type','severity','expect','actual','fixHint','verifyAfter'];var csv=headers.join(',')+'\\n';_issues.forEach(function(i){csv+=headers.map(function(h){var v=i[h]||'';return '"'+String(v).replace(/"/g,'""')+'"';}).join(',')+'\\n';});var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='issues.csv';a.click();}
+</script>
 </body></html>`;
 }
 
 // ---------- 主巡检 ----------
 async function runDaily(opts) {
   const o = opts || {};
-  const sites = readJson(CONFIG);
+  const configRaw = readJson(CONFIG);
+  const sites = Array.isArray(configRaw) ? configRaw : (configRaw.sites || []);
   const rec = {
     ts: new Date().toISOString(),
     date: todayStr(),
