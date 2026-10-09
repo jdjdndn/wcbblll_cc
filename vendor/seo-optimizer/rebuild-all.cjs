@@ -785,7 +785,8 @@ for (let si = 0; si < sites.length; si++) {
       const blocked = bots.filter((b) => new RegExp('User-agent:\\s*' + b + '[\\s\\S]*?Disallow:\\s*/\\s', 'i').test(robotsTxt + '\n'));
       ok = !blocked.length; detail = blocked.length ? `禁止 AI 爬虫 ${blocked.length} 个（${blocked.join(', ')}）` : `AI 爬虫可抓取（检查 ${bots.length} 个）`;
     }
-    checks.push({ desc: c.desc, type: c.type, ok, detail });
+    const _pages = (c.pattern && typeof c.pattern === 'object' && c.pattern.pages) || undefined;
+    checks.push({ desc: c.desc, type: c.type, file: c.file, pages: _pages, ok, detail });
   }
   results.push({ name: s.name, buildRes, note, checks });
 }
@@ -801,7 +802,7 @@ if (asJson) {
       name: r.name,
       build: r.buildRes ? (r.buildRes.ok ? 'success' : 'failed') : (r.note ? 'skipped' : null),
       note: r.note || null,
-      checks: r.checks.map((c) => ({ desc: c.desc, ok: c.ok, detail: c.detail })),
+      checks: r.checks.map((c) => ({ desc: c.desc, type: c.type, file: c.file, pages: c.pages, ok: c.ok, detail: c.detail })),
       ok: (!r.buildRes || r.buildRes.ok) && r.checks.every((c) => c.ok),
     })),
     allOk: results.every((r) => (!r.buildRes || r.buildRes.ok) && r.checks.every((c) => c.ok)),

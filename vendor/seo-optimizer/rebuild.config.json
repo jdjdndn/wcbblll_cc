@@ -1,760 +1,801 @@
 {
-  "sitesRoot": "E:\\code",
+  "sitesRoot": "E:\\code\\aaa-sites",
   "sites": [
-  {
-    "name": "wcbblll_cc",
-    "dir": "E:\\code\\wcbblll_cc",
-    "build": [
-      "node",
-      [
-        "build-static.mjs"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "链接数据全量静态化进HTML",
-        "type": "data-vs-html",
-        "file": "index.html",
-        "pattern": {
-          "dataFile": "links-data.json",
-          "dataPath": "links",
-          "htmlPattern": "class=\"link-card\""
+    {
+      "name": "wcbblll_cc",
+      "dir": "E:\\code\\aaa-sites\\wcbblll_cc",
+      "build": [
+        "node",
+        [
+          "build-static.mjs"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "链接数据全量静态化进HTML",
+          "type": "data-vs-html",
+          "file": "index.html",
+          "pattern": {
+            "dataFile": "links-data.json",
+            "dataPath": "links",
+            "htmlPattern": "class=\"link-card\""
+          }
+        },
+        {
+          "desc": "核心内容不再依赖fetch",
+          "type": "not-contains",
+          "file": "index.html",
+          "pattern": "fetch('links-data.json')"
+        },
+        {
+          "desc": "sitemap与页面产物双向一致",
+          "type": "sitemap",
+          "file": "sitemap.xml",
+          "pattern": {
+            "domain": "https://wcbblll.cc",
+            "pageFiles": [
+              "index.html",
+              "category/*.html"
+            ]
+          }
+        },
+        {
+          "desc": "页面Meta完整(title/desc/canonical/OG/JSON-LD)",
+          "type": "page-quality",
+          "file": "index.html",
+          "pattern": {
+            "pages": [
+              "index.html",
+              "category/*.html"
+            ],
+            "canonical": "https://wcbblll.cc",
+            "og": [
+              "og:title",
+              "og:description",
+              "og:image",
+              "og:url"
+            ],
+            "jsonld": true
+          }
+        },
+        {
+          "desc": "站内链接无死链+图片alt齐全",
+          "type": "link-health",
+          "file": "index.html",
+          "pattern": {
+            "pages": [
+              "index.html",
+              "category/*.html"
+            ]
+          }
+        },
+        {
+          "desc": "分类页已生成",
+          "type": "count-files",
+          "file": "category",
+          "pattern": ".html",
+          "min": 12
+        },
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        },
+        {
+          "desc": "移动端适配(viewport)",
+          "type": "mobile-friendly",
+          "file": "index.html",
+          "pattern": {
+            "pages": [
+              "index.html",
+              "category/*.html"
+            ]
+          }
+        },
+        {
+          "desc": "结构化数据深度校验",
+          "type": "structured-data",
+          "file": "index.html",
+          "pattern": {
+            "pages": [
+              "index.html",
+              "category/*.html"
+            ]
+          }
+        },
+        {
+          "desc": "Core Web Vitals(CLS/阻塞script)",
+          "type": "core-web-vitals",
+          "file": "index.html",
+          "pattern": {
+            "pages": [
+              "index.html",
+              "category/*.html"
+            ]
+          }
         }
-      },
-      {
-        "desc": "核心内容不再依赖fetch",
-        "type": "not-contains",
-        "file": "index.html",
-        "pattern": "fetch('links-data.json')"
-      },
-      {
-        "desc": "sitemap与页面产物双向一致",
-        "type": "sitemap",
-        "file": "sitemap.xml",
-        "pattern": {
-          "domain": "https://wcbblll.cc",
-          "pageFiles": [
-            "index.html",
-            "category/*.html"
-          ]
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\wcbblll_cc && npx wrangler deploy"
+      ],
+      "rebuild": true,
+      "regen": [
+        "node",
+        [
+          "build-static.mjs"
+        ]
+      ],
+      "smoke": [
+        {
+          "url": "https://wcbblll.cc/",
+          "status": 200,
+          "contains": "link-card"
+        },
+        {
+          "url": "https://wcbblll.cc/category/ecommerce.html",
+          "status": 200,
+          "contains": "link-card"
+        },
+        {
+          "url": "https://wcbblll.cc/sitemap.xml",
+          "status": 200,
+          "contains": "<loc>"
+        },
+        {
+          "url": "https://wcbblll.cc/robots.txt",
+          "status": 200
+        },
+        {
+          "url": "https://wcbblll.cc/__smoke_missing__.html",
+          "status": 404
         }
+      ],
+      "onlineBase": "https://wcbblll.cc"
+    },
+    {
+      "name": "github.io",
+      "dir": "E:\\code\\aaa-sites\\github.io",
+      "sourceMap": {
+        "dist/index.html": [
+          "src/index.html",
+          "src/App.vue",
+          "src/views/Home.vue"
+        ],
+        "dist/404.html": [
+          "src/views/NotFound.vue",
+          "src/index.html"
+        ]
       },
-      {
-        "desc": "页面Meta完整(title/desc/canonical/OG/JSON-LD)",
-        "type": "page-quality",
-        "file": "index.html",
-        "pattern": {
-          "pages": [
-            "index.html",
-            "category/*.html"
-          ],
-          "canonical": "https://wcbblll.cc",
-          "og": [
-            "og:title",
-            "og:description",
-            "og:image",
-            "og:url"
-          ],
-          "jsonld": true
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "首页含预渲染区块",
+          "type": "contains",
+          "file": "dist/index.html",
+          "pattern": "seo-prerender-full"
+        },
+        {
+          "desc": "首页含优惠正文",
+          "type": "contains",
+          "file": "dist/index.html",
+          "pattern": "美团外卖红包"
+        },
+        {
+          "desc": "sitemap条目充足(>=900)",
+          "type": "contains",
+          "file": "dist/sitemap.xml",
+          "pattern": "<loc>",
+          "min": 900
+        },
+        {
+          "desc": "404页存在",
+          "type": "exists",
+          "file": "dist/404.html"
+        },
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
         }
-      },
-      {
-        "desc": "站内链接无死链+图片alt齐全",
-        "type": "link-health",
-        "file": "index.html",
-        "pattern": {
-          "pages": [
-            "index.html",
-            "category/*.html"
-          ]
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\github.io && git add dist && git commit -m \"build\" && git push",
+        "cd E:\\code\\aaa-sites\\github.io && npm run cf:build && npm run cf:deploy"
+      ],
+      "rebuild": true,
+      "regenIsBuild": true,
+      "prechecks": [
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
         }
+      ],
+      "onlineBase": "https://jdjdndn.github.io"
+    },
+    {
+      "name": "xiaoshengyi",
+      "dir": "E:\\code\\aaa-sites\\xiaoshengyi",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "首页含预渲染列表",
+          "type": "contains",
+          "file": "web/dist/index.html",
+          "pattern": "data-prerender"
+        },
+        {
+          "desc": "sitemap已生成",
+          "type": "contains",
+          "file": "web/dist/sitemap.xml",
+          "pattern": "<loc>"
+        },
+        {
+          "desc": "404页存在",
+          "type": "exists",
+          "file": "web/dist/404.html"
+        },
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\xiaoshengyi && npx wrangler deploy"
+      ],
+      "rebuild": true,
+      "buildDir": "E:\\code\\aaa-sites\\xiaoshengyi\\web",
+      "regenIsBuild": true,
+      "prechecks": [
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "sourceMap": {
+        "web/dist/index.html": [
+          "web/index.html",
+          "web/src/App.vue",
+          "web/src/views/Home.vue"
+        ],
+        "web/dist/404.html": [
+          "web/src/views/NotFound.vue",
+          "web/index.html"
+        ],
+        "web/dist/sitemap.xml": [
+          "web/vite.config.js",
+          "web/src/router.js"
+        ]
       },
-      {
-        "desc": "分类页已生成",
-        "type": "count-files",
-        "file": "category",
-        "pattern": ".html",
-        "min": 12
-      },
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      },
-      {
-        "desc": "移动端适配(viewport)",
-        "type": "mobile-friendly",
-        "file": "index.html",
-        "pattern": { "pages": ["index.html", "category/*.html"] }
-      },
-      {
-        "desc": "结构化数据深度校验",
-        "type": "structured-data",
-        "file": "index.html",
-        "pattern": { "pages": ["index.html", "category/*.html"] }
-      },
-      {
-        "desc": "Core Web Vitals(CLS/阻塞script)",
-        "type": "core-web-vitals",
-        "file": "index.html",
-        "pattern": { "pages": ["index.html", "category/*.html"] }
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\wcbblll_cc && npx wrangler deploy"
-    ],
-    "rebuild": true,
-    "regen": [
-      "node",
-      [
-        "build-static.mjs"
-      ]
-    ],
-    "smoke": [
-      {
-        "url": "https://wcbblll.cc/",
-        "status": 200,
-        "contains": "link-card"
-      },
-      {
-        "url": "https://wcbblll.cc/category/ecommerce.html",
-        "status": 200,
-        "contains": "link-card"
-      },
-      {
-        "url": "https://wcbblll.cc/sitemap.xml",
-        "status": 200,
-        "contains": "<loc>"
-      },
-      {
-        "url": "https://wcbblll.cc/robots.txt",
-        "status": 200
-      },
-      {
-        "url": "https://wcbblll.cc/__smoke_missing__.html",
-        "status": 404
-      }
-    ],
-    "onlineBase": "https://wcbblll.cc"
-  },
-  {
-    "name": "github.io",
-    "dir": "E:\\code\\github.io",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "首页含预渲染区块",
-        "type": "contains",
-        "file": "dist/index.html",
-        "pattern": "seo-prerender-full"
-      },
-      {
-        "desc": "首页含优惠正文",
-        "type": "contains",
-        "file": "dist/index.html",
-        "pattern": "美团外卖红包"
-      },
-      {
-        "desc": "sitemap条目充足(>=900)",
-        "type": "contains",
-        "file": "dist/sitemap.xml",
-        "pattern": "<loc>",
-        "min": 900
-      },
-      {
-        "desc": "404页存在",
-        "type": "exists",
-        "file": "dist/404.html"
-      },
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\github.io && git add dist && git commit -m \"build\" && git push",
-      "cd E:\\code\\github.io && npm run cf:build && npm run cf:deploy"
-    ],
-    "rebuild": true,
-    "regenIsBuild": true,
-    "prechecks": [
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "onlineBase": "https://jdjdndn.github.io"
-  },
-  {
-    "name": "xiaoshengyi",
-    "dir": "E:\\code\\xiaoshengyi",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "首页含预渲染列表",
-        "type": "contains",
-        "file": "web/dist/index.html",
-        "pattern": "data-prerender"
-      },
-      {
-        "desc": "sitemap已生成",
-        "type": "contains",
-        "file": "web/dist/sitemap.xml",
-        "pattern": "<loc>"
-      },
-      {
-        "desc": "404页存在",
-        "type": "exists",
-        "file": "web/dist/404.html"
-      },
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\xiaoshengyi && npx wrangler deploy"
-    ],
-    "rebuild": true,
-    "buildDir": "E:\\code\\xiaoshengyi\\web",
-    "regenIsBuild": true,
-    "prechecks": [
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "onlineBase": "https://sy.wcbblll.cc"
-  },
-  {
-    "name": "号卡/dlhaoka",
-    "dir": "E:\\code\\号卡\\dlhaoka",
-    "build": null,
-    "verify": [
-      {
-        "desc": "sitemap已生成",
-        "type": "contains",
-        "file": "public/sitemap.xml",
-        "pattern": "<loc>https://dlhaoka.com/"
-      },
-      {
-        "desc": "404页存在",
-        "type": "exists",
-        "file": "public/404.html"
-      },
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\dlhaoka && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "onlineBase": "https://dlhaoka.com"
-  },
-  {
-    "name": "article-site",
-    "dir": "E:\\code\\article-site",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\article-site && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://www.wcbblll.cc"
-  },
-  {
-    "name": "号卡/172",
-    "dir": "E:\\code\\号卡\\172",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\172 && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://172.dlhaoka.com"
-  },
-  {
-    "name": "号卡/gc",
-    "dir": "E:\\code\\号卡\\gc",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\gc && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://gc.dlhaoka.com"
-  },
-  {
-    "name": "号卡/hk",
-    "dir": "E:\\code\\号卡\\hk",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\hk && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://hk.dlhaoka.com"
-  },
-  {
-    "name": "号卡/hm",
-    "dir": "E:\\code\\号卡\\hm",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      },
-      {
-        "desc": "文章404逻辑已修复",
-        "type": "contains",
-        "file": "app\\pages\\article\\[id].vue",
-        "pattern": "statusCode: 404"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\hm && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://hm.dlhaoka.com"
-  },
-  {
-    "name": "号卡/kd",
-    "dir": "E:\\code\\号卡\\kd",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      },
-      {
-        "desc": "文章404逻辑已修复",
-        "type": "contains",
-        "file": "app\\pages\\article\\[id].vue",
-        "pattern": "statusCode: 404"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\kd && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://kd.dlhaoka.com"
-  },
-  {
-    "name": "号卡/ksj",
-    "dir": "E:\\code\\号卡\\ksj",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      },
-      {
-        "desc": "文章404逻辑已修复",
-        "type": "contains",
-        "file": "app\\pages\\article\\[id].vue",
-        "pattern": "statusCode: 404"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\ksj && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://ksj.dlhaoka.com"
-  },
-  {
-    "name": "号卡/yk",
-    "dir": "E:\\code\\号卡\\yk",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "robots声明Sitemap",
-        "type": "contains",
-        "file": "public/robots.txt",
-        "pattern": "Sitemap:"
-      },
-      {
-        "desc": "文章404逻辑已修复",
-        "type": "contains",
-        "file": "app\\pages\\article\\[id].vue",
-        "pattern": "statusCode: 404"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\号卡\\yk && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://yk.dlhaoka.com"
-  },
-  {
-    "name": "随身wifi/chaoneng-wifi",
-    "dir": "E:\\code\\随身wifi\\chaoneng-wifi",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\随身wifi\\chaoneng-wifi && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://chaoneng.wcbblll.cc"
-  },
-  {
-    "name": "随身wifi/feilimao-wifi",
-    "dir": "E:\\code\\随身wifi\\feilimao-wifi",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\随身wifi\\feilimao-wifi && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://feilimao.wcbblll.cc"
-  },
-  {
-    "name": "随身wifi/gexing-wifi",
-    "dir": "E:\\code\\随身wifi\\gexing-wifi",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\随身wifi\\gexing-wifi && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://gexing.wcbblll.cc"
-  },
-  {
-    "name": "随身wifi/liantong-wifi",
-    "dir": "E:\\code\\随身wifi\\liantong-wifi",
-    "build": [
-      "npx",
-      [
-        "nuxt",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(404-page)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"404-page\""
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\随身wifi\\liantong-wifi && npm run build && npx wrangler deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://liantong.wcbblll.cc"
-  },
-  {
-    "name": "信用卡/kahe",
-    "dir": "E:\\code\\信用卡\\kahe",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "sitemap路由已新增",
-        "type": "exists",
-        "file": "server\\routes\\sitemap.xml.get.ts"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\信用卡\\kahe && npm run build && npm run deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://kahe.wcbblll.cc"
-  },
-  {
-    "name": "信用卡/suishou",
-    "dir": "E:\\code\\信用卡\\suishou",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "sitemap路由已新增",
-        "type": "exists",
-        "file": "server\\routes\\sitemap.xml.get.ts"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\信用卡\\suishou && npm run build && npm run deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://suishou.wcbblll.cc"
-  },
-  {
-    "name": "信用卡/zhangshang",
-    "dir": "E:\\code\\信用卡\\zhangshang",
-    "build": [
-      "npm",
-      [
-        "run",
-        "build"
-      ]
-    ],
-    "verify": [
-      {
-        "desc": "wrangler已配404(none)",
-        "type": "contains",
-        "file": "wrangler.jsonc",
-        "pattern": "\"none\""
-      },
-      {
-        "desc": "sitemap路由已新增",
-        "type": "exists",
-        "file": "server\\routes\\sitemap.xml.get.ts"
-      }
-    ],
-    "deploy": [
-      "cd E:\\code\\信用卡\\zhangshang && npm run build && npm run deploy"
-    ],
-    "rebuild": false,
-    "ssr": true,
-    "onlineBase": "https://zhangshang.wcbblll.cc"
-  },
-  {
-    "name": "GitHub自动文章",
-    "dir": "E:\\code\\GitHub自动文章",
-    "build": null,
-    "verify": [
-      {
-        "desc": "P0修复已落地(key兜底反查)",
-        "type": "contains",
-        "file": "template\\src\\index.js",
-        "pattern": "item.date"
-      }
-    ],
-    "deploy": [
-      "（文章系统修复后：git push 触发 CI 部署，见该项目 README）"
-    ],
-    "rebuild": false,
-    "onlineBase": null
-  }
+      "onlineBase": "https://sy.wcbblll.cc"
+    },
+    {
+      "name": "号卡/dlhaoka",
+      "dir": "E:\\code\\aaa-sites\\dlhaoka",
+      "build": null,
+      "verify": [
+        {
+          "desc": "sitemap已生成",
+          "type": "contains",
+          "file": "public/sitemap.xml",
+          "pattern": "<loc>https://dlhaoka.com/"
+        },
+        {
+          "desc": "404页存在",
+          "type": "exists",
+          "file": "public/404.html"
+        },
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\dlhaoka && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "onlineBase": "https://dlhaoka.com"
+    },
+    {
+      "name": "article-site",
+      "dir": "E:\\code\\aaa-sites\\article-site",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\article-site && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://www.wcbblll.cc"
+    },
+    {
+      "name": "号卡/172",
+      "dir": "E:\\code\\aaa-sites\\172",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\172 && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://172.dlhaoka.com"
+    },
+    {
+      "name": "号卡/gc",
+      "dir": "E:\\code\\aaa-sites\\gc",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\gc && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://gc.dlhaoka.com"
+    },
+    {
+      "name": "号卡/hk",
+      "dir": "E:\\code\\aaa-sites\\hk",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\hk && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://hk.dlhaoka.com"
+    },
+    {
+      "name": "号卡/hm",
+      "dir": "E:\\code\\aaa-sites\\hm",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        },
+        {
+          "desc": "文章404逻辑已修复",
+          "type": "contains",
+          "file": "app\\pages\\article\\[id].vue",
+          "pattern": "statusCode: 404"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\hm && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://hm.dlhaoka.com"
+    },
+    {
+      "name": "号卡/kd",
+      "dir": "E:\\code\\aaa-sites\\kd",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        },
+        {
+          "desc": "文章404逻辑已修复",
+          "type": "contains",
+          "file": "app\\pages\\article\\[id].vue",
+          "pattern": "statusCode: 404"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\kd && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://kd.dlhaoka.com"
+    },
+    {
+      "name": "号卡/ksj",
+      "dir": "E:\\code\\aaa-sites\\ksj",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        },
+        {
+          "desc": "文章404逻辑已修复",
+          "type": "contains",
+          "file": "app\\pages\\article\\[id].vue",
+          "pattern": "statusCode: 404"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\ksj && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://ksj.dlhaoka.com"
+    },
+    {
+      "name": "号卡/yk",
+      "dir": "E:\\code\\aaa-sites\\yk",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "robots声明Sitemap",
+          "type": "contains",
+          "file": "public/robots.txt",
+          "pattern": "Sitemap:"
+        },
+        {
+          "desc": "文章404逻辑已修复",
+          "type": "contains",
+          "file": "app\\pages\\article\\[id].vue",
+          "pattern": "statusCode: 404"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\yk && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://yk.dlhaoka.com"
+    },
+    {
+      "name": "随身wifi/chaoneng-wifi",
+      "dir": "E:\\code\\aaa-sites\\chaoneng-wifi",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\chaoneng-wifi && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://chaoneng.wcbblll.cc"
+    },
+    {
+      "name": "随身wifi/feilimao-wifi",
+      "dir": "E:\\code\\aaa-sites\\feilimao-wifi",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\feilimao-wifi && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://feilimao.wcbblll.cc"
+    },
+    {
+      "name": "随身wifi/gexing-wifi",
+      "dir": "E:\\code\\aaa-sites\\gexing-wifi",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\gexing-wifi && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://gexing.wcbblll.cc"
+    },
+    {
+      "name": "随身wifi/liantong-wifi",
+      "dir": "E:\\code\\aaa-sites\\liantong-wifi",
+      "build": [
+        "npx",
+        [
+          "nuxt",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(404-page)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"404-page\""
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\liantong-wifi && npm run build && npx wrangler deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://liantong.wcbblll.cc"
+    },
+    {
+      "name": "信用卡/kahe",
+      "dir": "E:\\code\\aaa-sites\\kahe",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "sitemap路由已新增",
+          "type": "exists",
+          "file": "server\\routes\\sitemap.xml.get.ts"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\kahe && npm run build && npm run deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://kahe.wcbblll.cc"
+    },
+    {
+      "name": "信用卡/suishou",
+      "dir": "E:\\code\\aaa-sites\\suishou",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "sitemap路由已新增",
+          "type": "exists",
+          "file": "server\\routes\\sitemap.xml.get.ts"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\suishou && npm run build && npm run deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://suishou.wcbblll.cc"
+    },
+    {
+      "name": "信用卡/zhangshang",
+      "dir": "E:\\code\\aaa-sites\\zhangshang",
+      "build": [
+        "npm",
+        [
+          "run",
+          "build"
+        ]
+      ],
+      "verify": [
+        {
+          "desc": "wrangler已配404(none)",
+          "type": "contains",
+          "file": "wrangler.jsonc",
+          "pattern": "\"none\""
+        },
+        {
+          "desc": "sitemap路由已新增",
+          "type": "exists",
+          "file": "server\\routes\\sitemap.xml.get.ts"
+        }
+      ],
+      "deploy": [
+        "cd E:\\code\\aaa-sites\\zhangshang && npm run build && npm run deploy"
+      ],
+      "rebuild": false,
+      "ssr": true,
+      "onlineBase": "https://zhangshang.wcbblll.cc"
+    },
+    {
+      "name": "GitHub自动文章",
+      "dir": "E:\\code\\aaa-sites\\GitHub自动文章",
+      "build": null,
+      "verify": [
+        {
+          "desc": "P0修复已落地(key兜底反查)",
+          "type": "contains",
+          "file": "template\\src\\index.js",
+          "pattern": "item.date"
+        }
+      ],
+      "deploy": [
+        "（文章系统修复后：git push 触发 CI 部署，见该项目 README）"
+      ],
+      "rebuild": false,
+      "onlineBase": null
+    }
   ]
 }

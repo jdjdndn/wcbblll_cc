@@ -28,6 +28,7 @@ const path = require('path');
 // —— AI 模型/提供方配置：唯一事实源 auto-ai-article/src/ai-config.ts
 //    通过 vendor/ai-article-pipeline 引用（file: 依赖），改模型只改 auto-ai-article 一处
 const { FREE_TEXT_MODELS, OPENROUTER_FREE_MODELS, FALLBACK_PROVIDERS } = require('ai-article-pipeline/ai-config');
+const { LocalAiProvider, CfRestProvider, FallbackChain } = require('ai-article-pipeline/ai-fallback');
 
 // —— 凭证读取 ——
 function cfg() {
@@ -81,31 +82,6 @@ function isDeterministicFailure(err) {
   const reason = classifyError(err);
   if (['quota_exceeded', 'rate_limit', 'timeout', 'invalid_request'].includes(reason)) return true;
   return /被截断|没有返回内容|过短|结尾不完整/.test(err.message || '');
-}
-
-// —— CF Workers AI 客户端（单模型）——
-function cfClient(model, { apiToken, accountId, timeoutMs, maxTokens }) {
-  return async (messages) => {
-    const body = { messages, max_tokens: maxTokens || 15360 };
-    if (model.noThinking) body.chat_template_kwargs = { thinking: false };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new DOMException('AI 请求超时', 'TimeoutError')), timeoutMs || 120000);
-    try {
-      const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model.id}`, {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + apiToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
-      const data = await res.json();
-      const content = extractResponse(data);
-      if (!content) throw new Error('AI 没有返回内容');
-      const fr = data && data.result && data.result.choices && data.result.choices[0] && data.result.choices[0].finish_reason;
-      if (fr === 'length') throw new Error('AI 输出被截断（finish_reason=length）');
-      return content;
-    } finally { clearTimeout(timer); }
-  };
 }
 
 // —— OpenAI 兼容客户端（备用提供方）——
@@ -162,17 +138,25 @@ function createUnifiedClient(opts) {
     }
   }
 
+  // FallbackChain（local + CF REST，降级逻辑委托给 dist，dist 升级自动跟进）
+  const chainProviders = [];
+  if (process.env.LLM_BASE_URL && process.env.LLM_MODEL) {
+    chainProviders.push(new LocalAiProvider({ baseUrl: process.env.LLM_BASE_URL, model: process.env.LLM_MODEL, apiKey: process.env.LLM_API_KEY || 'any' }));
+  }
+  if (c.apiToken && c.accountId) {
+    chainProviders.push(new CfRestProvider({ apiToken: c.apiToken, accountId: c.accountId }));
+  }
+  const chain = chainProviders.length ? new FallbackChain(chainProviders) : null;
+
   return async (messages) => {
-    // 1. CF 免费模型链（未标记当天失败的）
-    const c = cfg();
-    if (c.apiToken && c.accountId) {
-      const models = FREE_TEXT_MODELS.filter((m) => !badModels.has(m.id)).sort((a, b) => a.priority - b.priority);
-      for (const model of models) {
-        const r = await tryClient(cfClient(model, { apiToken: c.apiToken, accountId: c.accountId, timeoutMs: o.timeoutMs }), model.id, messages);
-        if (r.ok) return { ok: true, content: r.content, provider: 'Cloudflare Workers AI', model: model.id };
-        if (isDeterministicFailure(new Error(r.error))) { badModels.add(model.id); store.save([...badModels]); }
+    // 1. FallbackChain（本地网关 + CF REST，降级委托给 dist）
+    if (chain) {
+      try {
+        const content = await chain.run(messages);
+        return { ok: true, content, provider: chain.lastSuccess || 'fallback-chain', model: chain.lastSuccess || 'unknown' };
+      } catch (e) {
+        log(`FallbackChain 失败，切换备用提供方: ${String(e.message || e).slice(0, 120)}`);
       }
-      log('CF 免费模型链全部失败，切换备用提供方');
     }
 
     // 2. 备用提供方（有 key 且非当天失败；每个提供方内按模型链降级）
@@ -255,4 +239,46 @@ async function auditIssues(issues, opts) {
   return Object.assign(result, { advice: null, note: r.note });
 }
 
-module.exports = { auditIssues, scoreAdvice, FREE_TEXT_MODELS, cfg, createUnifiedClient, classifyError, extractResponse };
+// —— 提取首个平衡的 JSON 数组（处理 markdown 代码块/嵌套） ——
+function extractJsonArray(text) {
+  const start = text.indexOf('[');
+  if (start === -1) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true;
+    else if (ch === '[') depth++;
+    else if (ch === ']') { depth--; if (depth === 0) return text.slice(start, i + 1); }
+  }
+  return null;
+}
+
+// —— 方向B：巡检全绿时，AI 主动审查断言未覆盖的盲区 ——
+// pages: [{ site, htmlExcerpt, passedAssertions: [断言类型] }]
+// 输出: { enabled, blindSpots: [{site, issue, location, severity, suggestion}], provider, model }
+async function auditBlindSpots(pages, opts) {
+  const o = opts || {};
+  const list = (pages || []).filter((p) => p && p.htmlExcerpt && String(p.htmlExcerpt).trim()).slice(0, o.limit || 5);
+  if (!list.length) return { enabled: true, blindSpots: [], note: '无页面摘要，跳过盲区审查' };
+
+  const c = cfg();
+  const anyConfigured = (c.apiToken && c.accountId) || FALLBACK_PROVIDERS.some((p) => process.env[p.envKey]);
+  if (!anyConfigured) return { enabled: true, blindSpots: [], note: '未配置 AI 凭证，盲区审查跳过（不影响巡检）' };
+
+  const prompt = '你是 SEO/GEO 审查员。以下页面已通过确定性断言（见 passedAssertions）。请只从断言未覆盖的维度审查，找出潜在问题：\n- 内容质量与用户意图匹配度\n- E-E-A-T（经验/专业/权威/可信）\n- AI 可引用性（答案是否清晰可核实，GEO 核心）\n- heading 与正文的语义一致性\n- 结构化数据断言未深查的字段\n只输出 JSON 数组，无问题输出 []：[{site, issue, location, severity, suggestion}]\nseverity 取 high/medium/low。\n\n页面与已通过断言：\n' + JSON.stringify(list.map((p) => ({ site: p.site, passedAssertions: p.passedAssertions || [], htmlExcerpt: p.htmlExcerpt })), null, 2);
+
+  const client = createUnifiedClient(o);
+  const r = await client([{ role: 'user', content: prompt }]);
+  if (r.ok) {
+    const cleaned = r.content.replace(/```(?:json)?\s*/g, '').trim();
+    const jsonStr = extractJsonArray(cleaned);
+    let blindSpots = [];
+    if (jsonStr) { try { blindSpots = JSON.parse(jsonStr); } catch (e) {} }
+    if (!Array.isArray(blindSpots)) blindSpots = [];
+    return { enabled: true, blindSpots, provider: r.provider, model: r.model, count: blindSpots.length };
+  }
+  return { enabled: true, blindSpots: [], note: r.note || 'AI 调用失败' };
+}
+
+module.exports = { auditIssues, auditBlindSpots, scoreAdvice, extractJsonArray, FREE_TEXT_MODELS, cfg, createUnifiedClient, classifyError, extractResponse };

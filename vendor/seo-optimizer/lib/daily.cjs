@@ -184,6 +184,24 @@ function exportCSV(){var headers=['site','type','severity','expect','actual','fi
 </body></html>`;
 }
 
+// ---------- 收集全绿站首页摘要（供 AI 盲区审查，方向B） ----------
+function collectPageSummaries(localVerify, sites) {
+  const out = [];
+  for (const s of (localVerify.sites || [])) {
+    if (!s.ok) continue;
+    const siteCfg = sites.find((x) => x.name === s.name);
+    if (!siteCfg) continue;
+    const firstCheck = (s.checks || [])[0] || {};
+    const file = firstCheck.file || 'index.html';
+    const fp = path.join(siteCfg.dir, file);
+    if (!fs.existsSync(fp)) continue;
+    let html;
+    try { html = fs.readFileSync(fp, 'utf8'); } catch (e) { continue; }
+    out.push({ site: s.name, htmlExcerpt: html.slice(0, 4000), passedAssertions: (s.checks || []).map((c) => c.type).filter(Boolean) });
+  }
+  return out;
+}
+
 // ---------- 主巡检 ----------
 async function runDaily(opts) {
   const o = opts || {};
@@ -221,11 +239,17 @@ async function runDaily(opts) {
   for (const g of rec.productGuard) if (g.status && g.status.startsWith('检测到')) issues.push({ site: g.site, page: null, type: 'product-guard', severity: 'warning', expect: '产物未被手工改动', actual: `新增${g.added || 0} 修改${g.modified || 0} 删除${g.removed || 0}（已备份 ${g.backedUp}）`, fixSource: '产物目录', fixHint: '改动已备份至 .seo-optimizer-backup/', verifyAfter: '确认改动意图后重建' });
   rec.issues = issues;
 
-  // AI 修复建议（默认关闭；--ai-audit 显式启用；未配置 CF 凭证时跳过）
+  // AI 审计（默认关闭；--ai-audit 显式启用）
+  //   有问题 → 方向A：AI 生成修复建议；全绿 → 方向B：AI 主动审查断言盲区
   if (o.aiAudit) {
     try {
-      const { auditIssues } = require('./ai-audit.cjs');
-      rec.aiAdvice = await auditIssues(issues, { limit: o.aiLimit || 10 });
+      const aiAudit = require('./ai-audit.cjs');
+      if (issues.length) {
+        rec.aiAdvice = await aiAudit.auditIssues(issues, { limit: o.aiLimit || 10 });
+      } else {
+        const pages = collectPageSummaries(rec.localVerify, sites);
+        rec.aiBlindSpots = await aiAudit.auditBlindSpots(pages, { limit: o.aiLimit || 5 });
+      }
     } catch (e) {
       rec.aiAdvice = { enabled: false, note: 'AI 审计异常: ' + e.message };
     }
